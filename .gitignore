@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Операционные системы
+.DS_Store
+Thumbs.db
+
+# Виртуальные окружения
+venv/
+.env/
+.venv/
+ENV/
+
+# Данные и модели
+data/*.csv
+data/*.xlsx
+data/*.h5
+# models/*.h5
+# models/*.pkl
+# models/*.onnx
+*.weights
+
+# Логи и временные файлы
+logs/
+*.log
+temp/
+.tmp/
