@@ -1,19 +1,19 @@
 import pygame
-import config.colors as colors
+import constants.colors as colors
 
 # Константы
 WINDOW_WIDTH, WINDOW_HEIGHT = 500, 400
 SUMMARY_SIZE = (400, 300)
 TEST_SIZE = (400, 200)
 FONT_SIZE = 36
-INPUT_COLOR = (200, 200, 200)
-ACTIVE_COLOR = (150, 150, 150)
+
 
 def draw_text(screen, text, font, color, x, y, center=False):
     """Универсальная функция для отрисовки текста."""
     surface = font.render(text, True, color)
     rect = surface.get_rect(center=(x, y)) if center else (x, y)
     screen.blit(surface, rect)
+
 
 def show_input_window():
     """Окно ввода количества очагов и препятствий перед игрой."""
@@ -24,7 +24,7 @@ def show_input_window():
 
     input_boxes = [
         {"rect": pygame.Rect(300, 180, 100, 40), "text": "", "active": False},  # Очаги
-        {"rect": pygame.Rect(300, 240, 100, 40), "text": "", "active": False}   # Препятствия
+        {"rect": pygame.Rect(300, 240, 100, 40), "text": "", "active": False}  # Препятствия
     ]
     hints = ["Очаги", "Препятствия"]
     error = ""
@@ -36,7 +36,7 @@ def show_input_window():
         draw_text(screen, "Введите:", font, colors.BLACK, 50, 90)
 
         for idx, box in enumerate(input_boxes):
-            color = ACTIVE_COLOR if box["active"] else INPUT_COLOR
+            color = colors.ACTIVE_COLOR if box["active"] else colors.INPUT_COLOR
             pygame.draw.rect(screen, color, box["rect"])
             draw_text(screen, box["text"], font, colors.BLACK, box["rect"].x + 10, box["rect"].y + 10)
             draw_text(screen, hints[idx], font, colors.BLACK, box["rect"].x - 150, box["rect"].y + 10)
@@ -73,6 +73,7 @@ def show_input_window():
     pygame.quit()
     return fire, obstacles
 
+
 def show_summary_window(fire_count, obstacle_count, iteration_count, total_reward):
     """Отображает итоговое окно с информацией о завершенной игре."""
     pygame.init()
@@ -96,6 +97,7 @@ def show_summary_window(fire_count, obstacle_count, iteration_count, total_rewar
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return
+
 
 def show_test_prompt_window():
     """Окно с запросом, хочет ли пользователь протестировать модель."""
