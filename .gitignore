@@ -49,7 +49,9 @@ data/*.h5
 *.weights
 
 # Логи и временные файлы
-logs/
+logs/*.log
 *.log
 temp/
 .tmp/
+logs/logs.csv
+models/logs/logs.csv

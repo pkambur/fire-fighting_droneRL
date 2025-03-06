@@ -1,11 +1,25 @@
 import pygame
 import constants.colors as colors
+import tkinter as tk
+from tkinter import messagebox
 
-# Константы
-WINDOW_WIDTH, WINDOW_HEIGHT = 500, 400
-SUMMARY_SIZE = (400, 300)
-TEST_SIZE = (400, 200)
+# Константы для Pygame
 FONT_SIZE = 36
+
+# Глобальная переменная для отслеживания состояния Pygame
+pygame_initialized = False
+
+
+def init_pygame(size, caption):
+    """Инициализирует Pygame и возвращает экран и шрифт, если Pygame ещё не инициализирован."""
+    global pygame_initialized
+    if not pygame_initialized:
+        pygame.init()
+        pygame_initialized = True
+    screen = pygame.display.set_mode(size)
+    pygame.display.set_caption(caption)
+    font = pygame.font.Font(None, FONT_SIZE)
+    return screen, font
 
 
 def draw_text(screen, text, font, color, x, y, center=False):
@@ -16,70 +30,51 @@ def draw_text(screen, text, font, color, x, y, center=False):
 
 
 def show_input_window():
-    """Окно ввода количества очагов и препятствий перед игрой."""
-    pygame.init()
-    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-    pygame.display.set_caption("Настройки игры")
-    font = pygame.font.Font(None, FONT_SIZE)
+    """Окно ввода количества очагов и препятствий перед игрой с использованием tkinter."""
+    root = tk.Tk()
+    root.title("Настройки игры")
+    root.geometry("300x200")
 
-    input_boxes = [
-        {"rect": pygame.Rect(300, 180, 100, 40), "text": "", "active": False},  # Очаги
-        {"rect": pygame.Rect(300, 240, 100, 40), "text": "", "active": False}  # Препятствия
-    ]
-    hints = ["Очаги", "Препятствия"]
-    error = ""
-    running = True
+    tk.Label(root, text="Поле 10x10 клеток", font=("Arial", 12)).pack(pady=10)
+    tk.Label(root, text="Введите:", font=("Arial", 10)).pack(pady=5)
 
-    while running:
-        screen.fill(colors.WHITE)
-        draw_text(screen, "Поле 10x10 клеток", font, colors.BLACK, 50, 50)
-        draw_text(screen, "Введите:", font, colors.BLACK, 50, 90)
+    fire_var = tk.StringVar()
+    obstacle_var = tk.StringVar()
 
-        for idx, box in enumerate(input_boxes):
-            color = colors.ACTIVE_COLOR if box["active"] else colors.INPUT_COLOR
-            pygame.draw.rect(screen, color, box["rect"])
-            draw_text(screen, box["text"], font, colors.BLACK, box["rect"].x + 10, box["rect"].y + 10)
-            draw_text(screen, hints[idx], font, colors.BLACK, box["rect"].x - 150, box["rect"].y + 10)
+    tk.Label(root, text="Очаги").pack()
+    tk.Entry(root, textvariable=fire_var).pack()
+    tk.Label(root, text="Препятствия").pack()
+    tk.Entry(root, textvariable=obstacle_var).pack()
 
-        if error:
-            draw_text(screen, error, font, colors.RED, 50, 300)
-        pygame.display.flip()
+    result = [None, None]  # [fire, obstacles]
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                return None, None
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                for box in input_boxes:
-                    box["active"] = box["rect"].collidepoint(event.pos)
-            elif event.type == pygame.KEYDOWN:
-                for box in input_boxes:
-                    if box["active"]:
-                        if event.key == pygame.K_RETURN:
-                            try:
-                                fire = int(input_boxes[0]["text"]) if input_boxes[0]["text"] else 0
-                                obstacles = int(input_boxes[1]["text"]) if input_boxes[1]["text"] else 0
-                                if fire + obstacles > 50:
-                                    error = "Сумма > 50"
-                                else:
-                                    running = False
-                            except ValueError:
-                                error = "Только числа"
-                        elif event.key == pygame.K_BACKSPACE:
-                            box["text"] = box["text"][:-1]
-                        elif event.unicode.isdigit() and len(box["text"]) < 3:
-                            box["text"] += event.unicode
+    def submit():
+        try:
+            fire = int(fire_var.get()) if fire_var.get() else 0
+            obstacles = int(obstacle_var.get()) if obstacle_var.get() else 0
+            if fire + obstacles > 50:
+                messagebox.showerror("Ошибка", "Сумма > 50")
+            else:
+                result[0] = fire
+                result[1] = obstacles
+                root.quit()
+        except ValueError:
+            messagebox.showerror("Ошибка", "Только числа")
 
-    pygame.quit()
-    return fire, obstacles
+    tk.Button(root, text="Подтвердить", command=submit).pack(pady=10)
+    
+    root.mainloop()
+    root.destroy()
+    
+    if result[0] is None or result[1] is None:
+        return None, None
+    return result[0], result[1]
 
 
 def show_summary_window(fire_count, obstacle_count, iteration_count, total_reward):
     """Отображает итоговое окно с информацией о завершенной игре."""
-    pygame.init()
-    screen = pygame.display.set_mode(SUMMARY_SIZE)
-    pygame.display.set_caption("Итоги игры")
-    font = pygame.font.Font(None, FONT_SIZE)
+    global pygame_initialized
+    screen, font = init_pygame((400, 300), "Итоги игры")
 
     screen.fill(colors.WHITE)
     lines = [
@@ -92,22 +87,21 @@ def show_summary_window(fire_count, obstacle_count, iteration_count, total_rewar
         draw_text(screen, line, font, colors.BLACK, 50, 50 + i * 40)
 
     pygame.display.flip()
-    while True:
+    running = True
+    while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                return
+                running = False
+    # Не вызываем pygame.quit() здесь, чтобы избежать проблем с повторной инициализацией
 
 
 def show_test_prompt_window():
     """Окно с запросом, хочет ли пользователь протестировать модель."""
-    pygame.init()
-    screen = pygame.display.set_mode(TEST_SIZE)
-    pygame.display.set_caption("Тестирование модели")
-    font = pygame.font.Font(None, FONT_SIZE)
+    global pygame_initialized
+    screen, font = init_pygame((400, 200), "Тестирование модели")
 
     screen.fill(colors.WHITE)
-    draw_text(screen, "Тестировать модель?", font, colors.BLACK, TEST_SIZE[0] // 2, 40, center=True)
+    draw_text(screen, "Тестировать модель?", font, colors.BLACK, 200, 40, center=True)
     yes_button = pygame.Rect(50, 100, 100, 50)
     no_button = pygame.Rect(250, 100, 100, 50)
 
@@ -121,13 +115,20 @@ def show_test_prompt_window():
     while choice is None:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                return False
+                choice = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if yes_button.collidepoint(event.pos):
                     choice = True
                 elif no_button.collidepoint(event.pos):
                     choice = False
 
-    pygame.quit()
-    return choice
+    return choice  # Убираем pygame.quit() здесь
+
+
+# Функция для явного завершения Pygame в конце программы
+def quit_pygame():
+    """Завершает Pygame, если он был инициализирован."""
+    global pygame_initialized
+    if pygame_initialized:
+        pygame.quit()
+        pygame_initialized = False
