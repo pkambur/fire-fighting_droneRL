@@ -1,7 +1,7 @@
 import os
 import csv
 import json
-import logging
+from utils.logger import logging
 # import matplotlib.pyplot as plt
 from datetime import datetime
 from stable_baselines3 import PPO
@@ -47,17 +47,15 @@ class TrainingLogCallback(BaseCallback):
                   f" Fires Left = {fires_left}")
         return True
 
+
 summary_shown = False
+
 
 def run():
     global summary_shown
-    logger_file = "./logs/program.log"
     log_csv = "./logs/logs.csv"
     if os.path.exists(log_csv):
         os.remove(log_csv)
-
-    logging.basicConfig(filename=logger_file, level=logging.INFO,
-                        format='%(asctime)s,%(message)s', filemode='w')
 
     with open(log_csv, mode='w', newline='') as file:
         writer = csv.writer(file)
@@ -126,83 +124,6 @@ def run():
     # Завершаем Pygame в конце программы
     from render.user_interface import quit_pygame
     quit_pygame()
-
-# def run():
-#     logger_file = "./logs/program.log"
-#     log_csv = "./logs/logs.csv"
-#     if os.path.exists(log_csv):
-#         os.remove(log_csv)
-
-#     logging.basicConfig(filename=logger_file, level=logging.INFO,
-#                         format='%(asctime)s,%(message)s', filemode='w')
-#     # logger = logging.getLogger()
-
-#     with open(log_csv, mode='w', newline='') as file:
-#         writer = csv.writer(file)
-#         writer.writerow(
-#             ["Итерация", "Заряд", "Средства", "Очагов осталось", "Вознаграждение", "Action"])
-
-#     fire_count, obstacle_count = show_input_window()
-
-#     if fire_count is None or obstacle_count is None:
-#         print("Программа завершена пользователем.")
-#         return
-
-#     logging.info("Начинаем обучение модели...")
-#     model = train_and_evaluate(fire_count, obstacle_count)
-#     logging.info("Обучение завершено!")
-
-#     test_env = FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode="human")
-#     obs, _ = test_env.reset()
-#     total_reward = 0
-#     iteration_count = 0
-#     max_steps = 5000
-#     rewards = []
-
-#     logging.info("Начинаем test модели...")
-#     for step in range(max_steps):
-#         action, _states = model.predict(obs)#, deterministic=True)
-#         logging.info(f"Выбрано действие: {action}")
-#         obs, reward, done, _, info = test_env.step(action)
-#         total_reward += reward
-#         iteration_count += 1
-#         rewards.append(reward)
-
-#         log_message = [iteration_count, test_env.battery_level, test_env.extinguisher_count,
-#                        len(test_env.fires), reward, action]
-#         with open(log_csv, mode='a', newline='') as file:
-#             writer = csv.writer(file)
-#             writer.writerow(log_message)
-
-#         logging.info(f"Шаг {step + 1}: Награда = {reward}, Общая награда = {total_reward}, "
-#               f"Очагов осталось: {len(test_env.fires)}, Батарея: {test_env.battery_level}, "
-#               f"Огнетушителей: {test_env.extinguisher_count}")
-#         test_env.render()
-
-#         if done:
-#             if len(test_env.fires) == 0:
-#                 print(f"Тестирование завершено на шаге {step + 1}:"
-#                       f" Все очаги потушены! Общая награда: {total_reward}")
-#             elif test_env.battery_level <= 0:
-#                 print(f"Тестирование завершено на шаге {step + 1}:"
-#                       f" Батарея разрядилась! Общая награда: {total_reward}")
-#             elif step + 1 == max_steps:
-#                 print(f"Тестирование завершено на шаге {step + 1}:"
-#                       f" Достигнут лимит шагов. Общая награда: {total_reward}")
-#             else:
-#                 print(f"Тестирование завершено на шаге {step + 1} по "
-#                       f"неизвестной причине. Общая награда: {total_reward}")
-#             break
-#     #
-#     # plt.plot(rewards)
-#     # plt.title("Награды за каждый шаг тестирования")
-#     # plt.xlabel("Шаг")
-#     # plt.ylabel("Награда")
-#     # plt.show()
-
-#     show_summary_window(fire_count, obstacle_count, iteration_count, total_reward)
-#     test_env.close()
-
 
 def train_and_evaluate(fire_count, obstacle_count):
     def make_env():

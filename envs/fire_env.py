@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 import gymnasium as gym
 import numpy as np
@@ -7,58 +8,68 @@ import random
 from collections import deque
 
 from constants.colors import WHITE
-from models import (RENDER_FPS, GRID_SIZE, CELL_SIZE, BASE_POSITION, MAX_BATTERY, MAX_ELEMENTS, FIRE_REWARD,
-                   NEAR_FIRE_BONUS, OBSTACLE_PENALTY, OUT_OF_BOUNDS_PENALTY, NO_EXTINGUISHER_PENALTY, STAGNATION_PENALTY,
-                   STEP_PENALTY, STAGNATION_THRESHOLD, BASE_BONUS, BASE_RECHARGE, BATTERY_THRESHOLD, FINAL_REWARD,
-                   EXTINGUISHER_RECHARGE_BONUS)
-from render.user_interface import show_input_window, show_summary_window
+import envs as e
+
+from render.user_interface import show_input_window, show_summary_window, _load_images
 from gymnasium.spaces import Box, Discrete
 
 
 class FireEnv(gym.Env):
     """Среда для симуляции тушения пожаров агентом на сетке."""
-    metadata = {"render_modes": ["human"], "render_fps": RENDER_FPS}
+    metadata = {"render_modes": ["human"], "render_fps": e.RENDER_FPS}
 
     def __init__(self, fire_count: int = None, obstacle_count: int = None, render_mode: str = None):
         super().__init__()
         self.distances_to_fires = None
-        self.grid_size = GRID_SIZE
-        self.cell_size = CELL_SIZE
+        self.grid_size = e.GRID_SIZE
+        self.cell_size = e.CELL_SIZE
         self.screen_size = self.grid_size * self.cell_size
-        self.base = BASE_POSITION
-        self.position = self.base
-        self.battery_level = MAX_BATTERY
-        self.extinguisher_count = 1
+        self.base = e.BASE_POSITION
+        self.position = None
+        self.battery_level = None
+        self.extinguisher_count = None
         self.render_mode = render_mode
-        self.steps_without_progress = 0
-        self.iteration_count = 0
-        self.total_reward = 0
+        self.steps_without_progress = None
+        self.iteration_count = None
+        self.total_reward = None
         self.max_steps = 5000
+        self.view = e.AGENT_VIEW
 
         if fire_count is None or obstacle_count is None:
             fire_count, obstacle_count = show_input_window()
 
         self.fire_count = fire_count
         self.obstacle_count = obstacle_count
-
-        # КОММЕНТ ты эту генерацию потом повторяешь в ресет. Отсюда надо убрать
-        self.fires, self.obstacles = None, None#self.generate_positions(self.fire_count, self.obstacle_count)
-        # self.update_distances_to_fires()
+        self.images = _load_images(self.cell_size)
+        self.fires, self.obstacles = None, None
 
         self.action_space = Discrete(5)
-        # КОММЕНТ оставляю только max_fires, так как они дублируют друг друга с max_distances
-        max_fires = MAX_ELEMENTS - self.obstacle_count
-        # max_distances = max_fires
-        local_view_size = 25
+        max_fires = e.MAX_ELEMENTS - self.obstacle_count
+        local_view_size = self.view ** 2
         low = np.array(
             [0, 0, 0, 0, -self.grid_size, -self.grid_size, -self.grid_size, -self.grid_size] +
             [0] * max_fires + [0] * local_view_size, dtype=np.float32
         )
         high = np.array(
-            [MAX_BATTERY, 1, max_fires, 1, self.grid_size, self.grid_size, self.grid_size, self.grid_size] +
+            [e.MAX_BATTERY, 1, max_fires, 1, self.grid_size, self.grid_size, self.grid_size, self.grid_size] +
             [2 * self.grid_size] * max_fires + [3] * local_view_size, dtype=np.float32
         )
         self.observation_space = Box(low=low, high=high, dtype=np.float32)
+
+    def reset(self, seed: int = None, options: dict = None) -> tuple[np.ndarray, dict]:
+        """Сбрасывает среду в начальное состояние."""
+        if seed is not None:
+            np.random.seed(seed)
+        self.position = self.base
+        self.battery_level = e.MAX_BATTERY
+        self.extinguisher_count = 1
+        self.steps_without_progress = 0
+        self.iteration_count = 0
+        self.total_reward = 0
+
+        self.fires, self.obstacles = self.generate_positions(self.fire_count, self.obstacle_count)
+        self.update_distances_to_fires()
+        return self._get_state(), {}
 
     def generate_positions(self, fire_count: int, obstacle_count: int) -> tuple[set, set]:
         """Генерирует случайные позиции для пожаров и препятствий, достижимых от базы."""
@@ -96,7 +107,7 @@ class FireEnv(gym.Env):
         """Возвращает локальное представление агента (5x5)."""
         px, py = self.position
         view_size = 2
-        local_view = np.zeros((5, 5), dtype=np.int32)
+        local_view = np.zeros((self.view, self.view), dtype=np.int32)
 
         for dx in range(-view_size, view_size + 1):
             for dy in range(-view_size, view_size + 1):
@@ -110,148 +121,112 @@ class FireEnv(gym.Env):
                         local_view[dx + 2, dy + 2] = 3
         return local_view.flatten()
 
-    def reset(self, seed: int = None, options: dict = None) -> tuple[np.ndarray, dict]:
-        """Сбрасывает среду в начальное состояние."""
-        if seed is not None:
-            np.random.seed(seed)
-        self.position = self.base
-        self.battery_level = MAX_BATTERY
-        self.extinguisher_count = 1
-        self.steps_without_progress = 0
-        self.iteration_count = 0
-        self.total_reward = 0
-
-        self.fires, self.obstacles = self.generate_positions(self.fire_count, self.obstacle_count)
-        self.update_distances_to_fires()
-        return self._get_state(), {}
-
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict]:
-        reward = STEP_PENALTY
-        # КОММЕНТ у тебя ревард потом считается в строке 132 и перезаписывает это значение
-        done = False
         self.iteration_count += 1
+        done = False
 
         if self.iteration_count == 1:
             logging.info("Эпизод начался")
 
-        reward, done = self._take_action(action)
-        reward = self._apply_additional_rewards(reward)
-        
+        reward = self._take_action(action)
+        reward += self._apply_additional_rewards()
+
+        reward += e.STEP_PENALTY
+        logging.info(f'STEP_PENALTY = {e.STEP_PENALTY}')
+
         if len(self.fires) == 0:
-            reward += FINAL_REWARD
+            reward += e.FINAL_REWARD
+            logging.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
             done = True
-        
-        # Завершаем эпизод при battery_level <= 0
-        if self.battery_level <= 0:
+        elif self.battery_level <= 0:
             done = True
-            reward -= 50  # Дополнительный штраф за полную разрядку батареи
-        
+            reward += e.BATTERY_PENALTY
+            logging.info(f'BATTERY_PENALTY = {e.BATTERY_PENALTY}')
+
         done = done or self.iteration_count >= self.max_steps
         self.total_reward += reward
-
         state = self._get_state()
         return state, reward, done, False, {}
 
-    def _take_action(self, action: int) -> tuple[float, bool]:
+    def _take_action(self, action: int) -> float:
         """Обрабатывает действие агента (движение или тушение)."""
-        reward = STEP_PENALTY
-        done = False
-        #  КОММЕНТ  штраф за шаг не должен складываться с другими ревардами?
+        reward = 0
         if action == 4:  # Тушение
-            # КОММЕНТ зачем проверка на батереию, если игра уже завершена, если батерея закончилась
-            if self.position in self.fires and self.extinguisher_count > 0 and self.battery_level > 0:
+            if self.position in self.fires and self.extinguisher_count > 0:
                 self.fires.remove(self.position)
                 self.extinguisher_count -= 1
                 self.update_distances_to_fires()
                 self.steps_without_progress = 0
-                reward = FIRE_REWARD
-                logging.info(f'FIRE_REWARD = {reward}')
+                reward = e.FIRE_REWARD
+                logging.info(f'FIRE_REWARD = {e.FIRE_REWARD}')
                 logging.info(f"Очаг потушен на {self.position}! Осталось очагов: {len(self.fires)}")
             else:
-                reward = NO_EXTINGUISHER_PENALTY
-                logging.info(f'NO_EXTINGUISHER_PENALTY = {reward}')
+                reward = e.NO_EXTINGUISHER_PENALTY
+                logging.info(f'NO_EXTINGUISHER_PENALTY = {e.NO_EXTINGUISHER_PENALTY}')
                 self.steps_without_progress += 1
         else:  # Движение
             dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
             new_pos = (self.position[0] + dx, self.position[1] + dy)
 
-            if not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
-                reward = OUT_OF_BOUNDS_PENALTY
-                logging.info(f'OUT_OF_BOUNDS_PENALTY = {reward}')
-                self.steps_without_progress += 1
-            elif new_pos in self.obstacles:
-                reward = OBSTACLE_PENALTY
-                logging.info(f'OBSTACLE_PENALTY = {reward}')
-                self.steps_without_progress += 1
-            else:
-                base_dist_old = abs(self.position[0] - self.base[0]) + abs(self.position[1] - self.base[1])
-                distance_old = self.distances_to_fires[0] if self.distances_to_fires else float('inf')
-                
-                self.position = new_pos
-                self.update_distances_to_fires()
-                
-                distance_new = self.distances_to_fires[0] if self.distances_to_fires else float('inf')
-                base_dist_new = abs(self.position[0] - self.base[0]) + abs(self.position[1] - self.base[1])
-
-                if distance_new < distance_old:
-                    if self.extinguisher_count == 0:
-                        reward += 10
-                        logging.info(f'distance_new < distance_old = {reward}')
-                    else:
-                        reward += 30
-                        logging.info(f'distance_new < distance_old = {reward}')
-                    self.steps_without_progress = 0
-                elif distance_new > distance_old:
-                    reward -= 5
-                    logging.info(f'distance_new > distance_old = {reward}')
-                    self.steps_without_progress += 1
-
-                if self.extinguisher_count == 0 and base_dist_new < base_dist_old:
-                    reward += 20
-                    logging.info(f'extinguisher_count == 0 and base_dist_new < base_dist_old = {reward}')
-
-                # КОММЕНТ батарея должна уменьшаться только в этом иф или за движение
-                # Уменьшаем батарею только если она больше 0
+            if not self.check_crashes(new_pos):
                 if self.battery_level > 0:
                     self.battery_level -= 1
-                # Если батарея стала <= 0, это обработается в step
 
-                # КОММЕНТ он каждый раз заряжается, когда попадает на базу?
+                distance_old = self.distances_to_fires[0] if self.distances_to_fires else float('inf')
+                # base_dist_old = abs(self.position[0] - self.base[0]) + abs(self.position[1] - self.base[1])
+                self.position = new_pos
+                self.update_distances_to_fires()
+                distance_new = self.distances_to_fires[0] if self.distances_to_fires else float('inf')
+                # base_dist_new = abs(self.position[0] - self.base[0]) + abs(self.position[1] - self.base[1])
+
+                reward += self.check_dist_from_fires(distance_old, distance_new)
+
                 if self.position == self.base:
-                    self.battery_level = min(MAX_BATTERY, self.battery_level + BASE_RECHARGE)
-                    # КОММЕНТ за что он получает данную награду: за алгоритмическое получение порошка?
-                    # из этого кода ему просто выгодно бесконечно летать на базу
-                    if self.extinguisher_count == 0:
-                        self.extinguisher_count = 1
-                        reward += EXTINGUISHER_RECHARGE_BONUS
-                        logging.info(f'EXTINGUISHER_RECHARGE_BONUS = {reward}')
-                    reward += BASE_BONUS
-                    logging.info(f'BASE_BONUS = {reward}')
+                    if self.battery_level < e.BATTERY_THRESHOLD:
+                        self.battery_level = min(e.MAX_BATTERY, self.battery_level + e.BASE_RECHARGE)
+                    self.extinguisher_count = 1
+        return reward
 
-                if self.battery_level < BATTERY_THRESHOLD:
-                    base_distance = abs(self.position[0] - self.base[0]) + abs(self.position[1] - self.base[1])
-                    if base_distance > 3:
-                        reward -= 30
-                        logging.info(f'base_distance > 3 и battery_level < BATTERY_THRESHOLD  = {reward}')
+    def check_dist_from_fires(self, distance_old, distance_new):
+        reward = 0
+        if distance_new < distance_old:
+            if self.extinguisher_count == 0:
+                reward += 10
+                logging.info(f'distance_new < distance_old = 10')
+            else:
+                reward += 30
+                logging.info(f'distance_new < distance_old = 30')
+            self.steps_without_progress = 0
+        elif distance_new > distance_old:
+            reward -= 5
+            logging.info(f'distance_new > distance_old = -5')
+            self.steps_without_progress += 1
+        return reward
 
-                    # КОММЕНТ А тут он еще раз получает бонус за то, что он на базе
-                    elif self.position == self.base:
-                        reward += 20
-                        logging.info(f'base_distance < 3 и battery_level < BATTERY_THRESHOLD  = {reward}')
+    def check_crashes(self, new_pos: tuple[int | Any, int | Any]) -> bool:
+        if not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
+            reward = e.OUT_OF_BOUNDS_PENALTY
+            logging.info(f'OUT_OF_BOUNDS_PENALTY = {e.OUT_OF_BOUNDS_PENALTY}')
+            self.steps_without_progress += 1
+            return True
+        elif new_pos in self.obstacles:
+            reward = e.OBSTACLE_PENALTY
+            logging.info(f'OBSTACLE_PENALTY = {e.OBSTACLE_PENALTY}')
+            self.steps_without_progress += 1
+            return True
 
-        return reward, done
-
-    def _apply_additional_rewards(self, reward: float) -> float:
+    def _apply_additional_rewards(self) -> float:
         """Применяет дополнительные награды и штрафы."""
-        px, py = self.position
-        for fx, fy in self.fires:
-            if abs(px - fx) <= 2 and abs(py - fy) <= 2:
-                reward += NEAR_FIRE_BONUS
-                logging.info(f'NEAR_FIRE_BONUS  = {reward}')
-                break
-        if self.steps_without_progress > STAGNATION_THRESHOLD:
-            reward += STAGNATION_PENALTY
-            logging.info(f'STAGNATION_PENALTY  = {reward}')
+        reward = 0
+        # px, py = self.position
+        # for fx, fy in self.fires:
+        #     if abs(px - fx) <= 2 and abs(py - fy) <= 2:
+        #         reward += e.NEAR_FIRE_BONUS
+        #         logging.info(f'NEAR_FIRE_BONUS  = {e.NEAR_FIRE_BONUS}')
+        #         break
+        if self.steps_without_progress > e.STAGNATION_THRESHOLD:
+            reward += e.STAGNATION_PENALTY
+            logging.info(f'STAGNATION_PENALTY  = {e.STAGNATION_PENALTY}')
         return reward
 
     def _get_state(self) -> np.ndarray:
@@ -268,16 +243,16 @@ class FireEnv(gym.Env):
             self.position[1] - nearest_fire[1]
         ]
         distances = (self.distances_to_fires + [0] *
-                    (MAX_ELEMENTS - self.obstacle_count - len(self.distances_to_fires)))
+                     (e.MAX_ELEMENTS - self.obstacle_count - len(self.distances_to_fires)))
         # Добавляем индикатор необходимости базы
-        base_priority = 1.0 if (self.extinguisher_count == 0 or self.battery_level < BATTERY_THRESHOLD) else 0.0
+        base_priority = 1.0 if (self.extinguisher_count == 0 or self.battery_level < e.BATTERY_THRESHOLD) else 0.0
         state = np.concatenate([
             np.array([
-                self.battery_level,
-                self.extinguisher_count,
-                len(self.fires),
-                base_priority,  # Новый элемент состояния
-            ] + base_distances + fire_distances, dtype=np.float32),
+                         self.battery_level,
+                         self.extinguisher_count,
+                         len(self.fires),
+                         base_priority,  # Новый элемент состояния
+                     ] + base_distances + fire_distances, dtype=np.float32),
             np.array(distances, dtype=np.float32),
             local_view.astype(np.float32)
         ])
@@ -293,45 +268,23 @@ class FireEnv(gym.Env):
             self.screen = pygame.display.set_mode((self.screen_size, self.screen_size))
             pygame.display.set_caption("Fire Environment")
 
-        if not hasattr(self, 'images'):
-            self._load_images()
-
         self.screen.fill(WHITE)
         for fire in self.fires:
             self.screen.blit(self.images["fire"], (fire[0] * self.cell_size, fire[1] * self.cell_size))
         for obstacle in self.obstacles:
-            self.screen.blit(self.images["obstacle"], (obstacle[0] * self.cell_size, obstacle[1] * self.cell_size))
-        self.screen.blit(self.images["base"], (self.base[0] * self.cell_size, self.base[1] * self.cell_size))
-        self.screen.blit(self.images["agent"], (self.position[0] * self.cell_size, self.position[1] * self.cell_size))
+            self.screen.blit(self.images["obstacle"],
+                             (obstacle[0] * self.cell_size, obstacle[1] * self.cell_size))
+        self.screen.blit(self.images["base"],
+                         (self.base[0] * self.cell_size, self.base[1] * self.cell_size))
+        self.screen.blit(self.images["agent"],
+                         (self.position[0] * self.cell_size, self.position[1] * self.cell_size))
 
         pygame.display.flip()
         pygame.time.delay(100)
-
-    def _load_images(self) -> None:
-        """Загружает и масштабирует изображения для рендеринга."""
-        try:
-            self.images = {
-                "base": pygame.transform.scale(pygame.image.load("data/images/base.jpg"),
-                                               (self.cell_size, self.cell_size)),
-                "agent": pygame.transform.scale(pygame.image.load("data/images/agent.jpg"),
-                                                (self.cell_size, self.cell_size)),
-                "fire": pygame.transform.scale(pygame.image.load("data/images/fire.jpg"),
-                                               (self.cell_size, self.cell_size)),
-                "obstacle": pygame.transform.scale(pygame.image.load("data/images/tree.jpg"),
-                                                   (self.cell_size, self.cell_size)),
-            }
-        except FileNotFoundError as e:
-            raise FileNotFoundError(f"Не удалось загрузить изображение: {e}")
 
     def close(self) -> None:
         if self.render_mode == "human" and hasattr(self, 'screen'):
             from render.user_interface import show_summary_window
             show_summary_window(self.fire_count, self.obstacle_count, self.iteration_count, self.total_reward)
             del self.screen
-    
-    # def close(self) -> None:
-    #     """Закрывает среду и отображает итоги, если требуется."""
-    #     if self.render_mode == "human":
-    #         show_summary_window(self.fire_count, self.obstacle_count, self.iteration_count, self.total_reward)
-    #         pygame.quit()
 

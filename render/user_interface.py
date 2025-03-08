@@ -1,4 +1,8 @@
+from typing import Dict
+
 import pygame
+from pygame import Surface, SurfaceType
+
 import constants.colors as colors
 import tkinter as tk
 from tkinter import messagebox
@@ -62,10 +66,10 @@ def show_input_window():
             messagebox.showerror("Ошибка", "Только числа")
 
     tk.Button(root, text="Подтвердить", command=submit).pack(pady=10)
-    
+
     root.mainloop()
     root.destroy()
-    
+
     if result[0] is None or result[1] is None:
         return None, None
     return result[0], result[1]
@@ -132,3 +136,21 @@ def quit_pygame():
     if pygame_initialized:
         pygame.quit()
         pygame_initialized = False
+
+
+def _load_images(cell_size) -> dict[str, Surface | SurfaceType]:
+    """Загружает и масштабирует изображения для рендеринга."""
+    try:
+        images = {
+            "base": pygame.transform.scale(pygame.image.load("data/images/base.jpg"),
+                                           (cell_size, cell_size)),
+            "agent": pygame.transform.scale(pygame.image.load("data/images/agent.jpg"),
+                                            (cell_size, cell_size)),
+            "fire": pygame.transform.scale(pygame.image.load("data/images/fire.jpg"),
+                                           (cell_size, cell_size)),
+            "obstacle": pygame.transform.scale(pygame.image.load("data/images/tree.jpg"),
+                                               (cell_size, cell_size)),
+        }
+        return images
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"Не удалось загрузить изображение: {e}")
