@@ -32,7 +32,7 @@ class FireEnv(gym.Env):
         self.steps_without_progress = None
         self.iteration_count = None
         self.total_reward = None
-        self.max_steps = 5000
+        self.max_steps = 300
         self.view = e.AGENT_VIEW
 
         if fire_count is None or obstacle_count is None:
@@ -58,6 +58,7 @@ class FireEnv(gym.Env):
 
     def reset(self, seed: int = None, options: dict = None) -> tuple[np.ndarray, dict]:
         """Сбрасывает среду в начальное состояние."""
+        logging.info('Reset')
         if seed is not None:
             np.random.seed(seed)
         self.position = self.base
@@ -142,8 +143,11 @@ class FireEnv(gym.Env):
             done = True
             reward += e.BATTERY_PENALTY
             logging.info(f'BATTERY_PENALTY = {e.BATTERY_PENALTY}')
+        elif self.iteration_count >= self.max_steps:
+            reward -= 1000
+            logging.info(f'MAX_STEPS DONE = 1000')
+            done = True
 
-        done = done or self.iteration_count >= self.max_steps
         self.total_reward += reward
         state = self._get_state()
         return state, reward, done, False, {}
@@ -168,7 +172,9 @@ class FireEnv(gym.Env):
             dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
             new_pos = (self.position[0] + dx, self.position[1] + dy)
 
-            if not self.check_crashes(new_pos):
+            crash_penalty, is_crash = self.check_crashes(new_pos)
+            reward += crash_penalty
+            if not is_crash:
                 if self.battery_level > 0:
                     self.battery_level -= 1
 
@@ -184,6 +190,8 @@ class FireEnv(gym.Env):
                 if self.position == self.base:
                     if self.battery_level < e.BATTERY_THRESHOLD:
                         self.battery_level = min(e.MAX_BATTERY, self.battery_level + e.BASE_RECHARGE)
+                        reward += e.BASE_BONUS
+                        logging.info(f'BASE CHARGE = {e.BASE_BONUS}')
                     self.extinguisher_count = 1
         return reward
 
@@ -191,10 +199,10 @@ class FireEnv(gym.Env):
         reward = 0
         if distance_new < distance_old:
             if self.extinguisher_count == 0:
-                reward += 10
+                reward += 1
                 logging.info(f'distance_new < distance_old = 10')
             else:
-                reward += 30
+                reward += 3
                 logging.info(f'distance_new < distance_old = 30')
             self.steps_without_progress = 0
         elif distance_new > distance_old:
@@ -203,17 +211,20 @@ class FireEnv(gym.Env):
             self.steps_without_progress += 1
         return reward
 
-    def check_crashes(self, new_pos: tuple[int | Any, int | Any]) -> bool:
+    def check_crashes(self, new_pos: tuple[int | Any, int | Any]) -> tuple[float, bool]:
+        reward = 0
+        crash = False
         if not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
             reward = e.OUT_OF_BOUNDS_PENALTY
             logging.info(f'OUT_OF_BOUNDS_PENALTY = {e.OUT_OF_BOUNDS_PENALTY}')
             self.steps_without_progress += 1
-            return True
+            crash = True
         elif new_pos in self.obstacles:
             reward = e.OBSTACLE_PENALTY
             logging.info(f'OBSTACLE_PENALTY = {e.OBSTACLE_PENALTY}')
             self.steps_without_progress += 1
-            return True
+            crash = True
+        return reward, crash
 
     def _apply_additional_rewards(self) -> float:
         """Применяет дополнительные награды и штрафы."""

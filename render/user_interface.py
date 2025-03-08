@@ -37,7 +37,7 @@ def show_input_window():
     """Окно ввода количества очагов и препятствий перед игрой с использованием tkinter."""
     root = tk.Tk()
     root.title("Настройки игры")
-    root.geometry("300x200")
+    root.geometry("300x300")
 
     tk.Label(root, text="Поле 10x10 клеток", font=("Arial", 12)).pack(pady=10)
     tk.Label(root, text="Введите:", font=("Arial", 10)).pack(pady=5)

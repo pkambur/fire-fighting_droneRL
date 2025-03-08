@@ -59,7 +59,7 @@ def run():
 
     with open(log_csv, mode='w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(["Итерация", "Заряд", "Средства", "Очагов осталось", "Вознаграждение", "Action"])
+        writer.writerow(["Шаг", "Заряд", "Средства", "Очагов осталось", "Вознаграждение", "Действие"])
 
     fire_count, obstacle_count = show_input_window()
 
@@ -81,7 +81,7 @@ def run():
 
         logging.info("Начинаем тест модели...")
         for step in range(max_steps):
-            action, _states = model.predict(obs)
+            action, _ = model.predict(obs)
             logging.info(f"Выбрано действие: {action}")
             obs, reward, terminated, truncated, info = test_env.step(action)
             total_reward += reward
@@ -125,6 +125,7 @@ def run():
     from render.user_interface import quit_pygame
     quit_pygame()
 
+
 def train_and_evaluate(fire_count, obstacle_count):
     def make_env():
         env = FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode=None)
@@ -139,14 +140,15 @@ def train_and_evaluate(fire_count, obstacle_count):
         "MlpPolicy",
         vec_env,
         verbose=1,
-        learning_rate=0.0001,
-        n_steps=2048,
+        learning_rate=0.001,
+        n_steps=512,
         batch_size=128,
         n_epochs=3,
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
         ent_coef=0.05,
+        clip_range_vf=0.2,
         tensorboard_log=log_dir
     )
 
@@ -162,9 +164,10 @@ def train_and_evaluate(fire_count, obstacle_count):
     # ОЛЯ: временно закомментированы колбеки
     # training_log_callback = TrainingLogCallback()
 
-    model.learn(total_timesteps=50000, progress_bar=True)  # , callback=[eval_callback, training_log_callback], progress_bar=True)
+    model.learn(total_timesteps=50000,
+                progress_bar=True)  # , callback=[eval_callback, training_log_callback], progress_bar=True)
 
-    mean_reward, std_reward = evaluate_policy(model, vec_env, n_eval_episodes=10, deterministic=True)
+    mean_reward, std_reward = evaluate_policy(model, vec_env, n_eval_episodes=10)
     print(f"Средняя награда после обучения: {mean_reward} +/- {std_reward}")
 
     model.save("ppo_fire_model")
