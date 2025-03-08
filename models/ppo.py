@@ -241,7 +241,7 @@ def train_and_evaluate(fire_count, obstacle_count):
     # ОЛЯ: временно закомментированы колбеки
     # training_log_callback = TrainingLogCallback()
 
-    model.learn(total_timesteps=100000, progress_bar=True)  # , callback=[eval_callback, training_log_callback], progress_bar=True)
+    model.learn(total_timesteps=50000, progress_bar=True)  # , callback=[eval_callback, training_log_callback], progress_bar=True)
 
     mean_reward, std_reward = evaluate_policy(model, vec_env, n_eval_episodes=10, deterministic=True)
     print(f"Средняя награда после обучения: {mean_reward} +/- {std_reward}")

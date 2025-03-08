@@ -1,3 +1,5 @@
+import logging
+
 import gymnasium as gym
 import numpy as np
 import pygame
@@ -38,20 +40,23 @@ class FireEnv(gym.Env):
 
         self.fire_count = fire_count
         self.obstacle_count = obstacle_count
-        self.fires, self.obstacles = self.generate_positions(self.fire_count, self.obstacle_count)
-        self.update_distances_to_fires()
+
+        # КОММЕНТ ты эту генерацию потом повторяешь в ресет. Отсюда надо убрать
+        self.fires, self.obstacles = None, None#self.generate_positions(self.fire_count, self.obstacle_count)
+        # self.update_distances_to_fires()
 
         self.action_space = Discrete(5)
+        # КОММЕНТ оставляю только max_fires, так как они дублируют друг друга с max_distances
         max_fires = MAX_ELEMENTS - self.obstacle_count
-        max_distances = max_fires
+        # max_distances = max_fires
         local_view_size = 25
         low = np.array(
             [0, 0, 0, 0, -self.grid_size, -self.grid_size, -self.grid_size, -self.grid_size] +
-            [0] * max_distances + [0] * local_view_size, dtype=np.float32
+            [0] * max_fires + [0] * local_view_size, dtype=np.float32
         )
         high = np.array(
             [MAX_BATTERY, 1, max_fires, 1, self.grid_size, self.grid_size, self.grid_size, self.grid_size] +
-            [2 * self.grid_size] * max_distances + [3] * local_view_size, dtype=np.float32
+            [2 * self.grid_size] * max_fires + [3] * local_view_size, dtype=np.float32
         )
         self.observation_space = Box(low=low, high=high, dtype=np.float32)
 
@@ -122,11 +127,12 @@ class FireEnv(gym.Env):
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict]:
         reward = STEP_PENALTY
+        # КОММЕНТ у тебя ревард потом считается в строке 132 и перезаписывает это значение
         done = False
         self.iteration_count += 1
 
         if self.iteration_count == 1:
-            print("Эпизод начался")
+            logging.info("Эпизод начался")
 
         reward, done = self._take_action(action)
         reward = self._apply_additional_rewards(reward)
@@ -150,17 +156,20 @@ class FireEnv(gym.Env):
         """Обрабатывает действие агента (движение или тушение)."""
         reward = STEP_PENALTY
         done = False
-
+        #  КОММЕНТ  штраф за шаг не должен складываться с другими ревардами?
         if action == 4:  # Тушение
+            # КОММЕНТ зачем проверка на батереию, если игра уже завершена, если батерея закончилась
             if self.position in self.fires and self.extinguisher_count > 0 and self.battery_level > 0:
                 self.fires.remove(self.position)
                 self.extinguisher_count -= 1
                 self.update_distances_to_fires()
                 self.steps_without_progress = 0
                 reward = FIRE_REWARD
-                print(f"Очаг потушен на {self.position}! Осталось очагов: {len(self.fires)}")
+                logging.info(f'FIRE_REWARD = {reward}')
+                logging.info(f"Очаг потушен на {self.position}! Осталось очагов: {len(self.fires)}")
             else:
                 reward = NO_EXTINGUISHER_PENALTY
+                logging.info(f'NO_EXTINGUISHER_PENALTY = {reward}')
                 self.steps_without_progress += 1
         else:  # Движение
             dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
@@ -168,9 +177,11 @@ class FireEnv(gym.Env):
 
             if not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
                 reward = OUT_OF_BOUNDS_PENALTY
+                logging.info(f'OUT_OF_BOUNDS_PENALTY = {reward}')
                 self.steps_without_progress += 1
             elif new_pos in self.obstacles:
                 reward = OBSTACLE_PENALTY
+                logging.info(f'OBSTACLE_PENALTY = {reward}')
                 self.steps_without_progress += 1
             else:
                 base_dist_old = abs(self.position[0] - self.base[0]) + abs(self.position[1] - self.base[1])
@@ -185,34 +196,48 @@ class FireEnv(gym.Env):
                 if distance_new < distance_old:
                     if self.extinguisher_count == 0:
                         reward += 10
+                        logging.info(f'distance_new < distance_old = {reward}')
                     else:
                         reward += 30
+                        logging.info(f'distance_new < distance_old = {reward}')
                     self.steps_without_progress = 0
                 elif distance_new > distance_old:
                     reward -= 5
+                    logging.info(f'distance_new > distance_old = {reward}')
                     self.steps_without_progress += 1
 
                 if self.extinguisher_count == 0 and base_dist_new < base_dist_old:
                     reward += 20
+                    logging.info(f'extinguisher_count == 0 and base_dist_new < base_dist_old = {reward}')
 
+                # КОММЕНТ батарея должна уменьшаться только в этом иф или за движение
                 # Уменьшаем батарею только если она больше 0
                 if self.battery_level > 0:
                     self.battery_level -= 1
                 # Если батарея стала <= 0, это обработается в step
 
+                # КОММЕНТ он каждый раз заряжается, когда попадает на базу?
                 if self.position == self.base:
                     self.battery_level = min(MAX_BATTERY, self.battery_level + BASE_RECHARGE)
+                    # КОММЕНТ за что он получает данную награду: за алгоритмическое получение порошка?
+                    # из этого кода ему просто выгодно бесконечно летать на базу
                     if self.extinguisher_count == 0:
                         self.extinguisher_count = 1
                         reward += EXTINGUISHER_RECHARGE_BONUS
+                        logging.info(f'EXTINGUISHER_RECHARGE_BONUS = {reward}')
                     reward += BASE_BONUS
+                    logging.info(f'BASE_BONUS = {reward}')
 
                 if self.battery_level < BATTERY_THRESHOLD:
                     base_distance = abs(self.position[0] - self.base[0]) + abs(self.position[1] - self.base[1])
                     if base_distance > 3:
                         reward -= 30
+                        logging.info(f'base_distance > 3 и battery_level < BATTERY_THRESHOLD  = {reward}')
+
+                    # КОММЕНТ А тут он еще раз получает бонус за то, что он на базе
                     elif self.position == self.base:
                         reward += 20
+                        logging.info(f'base_distance < 3 и battery_level < BATTERY_THRESHOLD  = {reward}')
 
         return reward, done
 
@@ -222,9 +247,11 @@ class FireEnv(gym.Env):
         for fx, fy in self.fires:
             if abs(px - fx) <= 2 and abs(py - fy) <= 2:
                 reward += NEAR_FIRE_BONUS
+                logging.info(f'NEAR_FIRE_BONUS  = {reward}')
                 break
         if self.steps_without_progress > STAGNATION_THRESHOLD:
             reward += STAGNATION_PENALTY
+            logging.info(f'STAGNATION_PENALTY  = {reward}')
         return reward
 
     def _get_state(self) -> np.ndarray:
