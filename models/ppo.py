@@ -76,11 +76,10 @@ def run():
         obs, _ = test_env.reset()
         total_reward = 0
         iteration_count = 0
-        max_steps = 5000
         rewards = []
 
         logging.info("Начинаем тест модели...")
-        for step in range(max_steps):
+        while True:
             action, _ = model.predict(obs)
             logging.info(f"Выбрано действие: {action}")
             obs, reward, terminated, truncated, info = test_env.step(action)
@@ -94,23 +93,23 @@ def run():
                 writer = csv.writer(file)
                 writer.writerow(log_message)
 
-            logging.info(f"Шаг {step + 1}: Награда = {reward}, Общая награда = {total_reward}, "
+            logging.info(f"Шаг {test_env.iteration_count + 1}: Награда = {reward}, Общая награда = {total_reward}, "
                          f"Очагов осталось: {len(test_env.fires)}, Батарея: {test_env.battery_level}, "
                          f"Огнетушителей: {test_env.extinguisher_count}")
             test_env.render()
 
             if terminated or truncated:
                 if len(test_env.fires) == 0:
-                    print(f"Тестирование завершено на шаге {step + 1}:"
+                    print(f"Тестирование завершено на шаге {test_env.iteration_count}:"
                           f" Все очаги потушены! Общая награда: {total_reward}")
                 elif test_env.battery_level <= 0:
-                    print(f"Тестирование завершено на шаге {step + 1}:"
+                    print(f"Тестирование завершено на шаге {test_env.iteration_count}:"
                           f" Батарея разрядилась! Общая награда: {total_reward}")
-                elif step + 1 == max_steps:
-                    print(f"Тестирование завершено на шаге {step + 1}:"
+                elif test_env.iteration_count + 1 >= test_env.max_steps:
+                    print(f"Тестирование завершено на шаге {test_env.iteration_count}:"
                           f" Достигнут лимит шагов. Общая награда: {total_reward}")
                 else:
-                    print(f"Тестирование завершено на шаге {step + 1} по "
+                    print(f"Тестирование завершено на шаге {test_env.iteration_count} по "
                           f"неизвестной причине. Общая награда: {total_reward}")
                 if not summary_shown:
                     test_env.close()  # Вызываем close только один раз
@@ -141,13 +140,13 @@ def train_and_evaluate(fire_count, obstacle_count):
         vec_env,
         verbose=1,
         learning_rate=0.0001,
-        n_steps=1032,
+        n_steps=2048,
         batch_size=128,
         n_epochs=3,
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
-        ent_coef=0.05,
+        # ent_coef=0.05,
         clip_range_vf=0.2,
         tensorboard_log=log_dir
     )
