@@ -140,8 +140,8 @@ def train_and_evaluate(fire_count, obstacle_count):
         "MlpPolicy",
         vec_env,
         verbose=1,
-        learning_rate=0.001,
-        n_steps=512,
+        learning_rate=0.0001,
+        n_steps=1032,
         batch_size=128,
         n_epochs=3,
         gamma=0.99,
@@ -164,7 +164,7 @@ def train_and_evaluate(fire_count, obstacle_count):
     # ОЛЯ: временно закомментированы колбеки
     # training_log_callback = TrainingLogCallback()
 
-    model.learn(total_timesteps=50000,
+    model.learn(total_timesteps=100000,
                 progress_bar=True)  # , callback=[eval_callback, training_log_callback], progress_bar=True)
 
     mean_reward, std_reward = evaluate_policy(model, vec_env, n_eval_episodes=10)

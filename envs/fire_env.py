@@ -1,16 +1,13 @@
 import logging
-from typing import Any
-
 import gymnasium as gym
 import numpy as np
 import pygame
 import random
-from collections import deque
 
 from constants.colors import WHITE
 import envs as e
 
-from render.user_interface import show_input_window, show_summary_window, _load_images
+from render.user_interface import show_input_window, load_images
 from gymnasium.spaces import Box, Discrete
 
 
@@ -40,20 +37,22 @@ class FireEnv(gym.Env):
 
         self.fire_count = fire_count
         self.obstacle_count = obstacle_count
-        self.images = _load_images(self.cell_size)
+        self.images = load_images(self.cell_size)
         self.fires, self.obstacles = None, None
 
-        self.action_space = Discrete(5)
-        max_fires = e.MAX_ELEMENTS - self.obstacle_count
+        self.action_space = Discrete(4)
         local_view_size = self.view ** 2
         low = np.array(
-            [0, 0, 0, 0, -self.grid_size, -self.grid_size, -self.grid_size, -self.grid_size] +
-            [0] * max_fires + [0] * local_view_size, dtype=np.float32
+            [0, 0, 0, 0,
+             -self.grid_size, -self.grid_size, -self.grid_size, -self.grid_size] +
+            [0] * fire_count + [0] * local_view_size, dtype=np.float32
         )
         high = np.array(
-            [e.MAX_BATTERY, 1, max_fires, 1, self.grid_size, self.grid_size, self.grid_size, self.grid_size] +
-            [2 * self.grid_size] * max_fires + [3] * local_view_size, dtype=np.float32
+            [e.MAX_BATTERY, 1, fire_count, 1,
+             self.grid_size, self.grid_size, self.grid_size, self.grid_size] +
+            [2 * self.grid_size] * fire_count + [3] * local_view_size, dtype=np.float32
         )
+
         self.observation_space = Box(low=low, high=high, dtype=np.float32)
 
     def reset(self, seed: int = None, options: dict = None) -> tuple[np.ndarray, dict]:
@@ -76,27 +75,10 @@ class FireEnv(gym.Env):
         """Генерирует случайные позиции для пожаров и препятствий, достижимых от базы."""
         all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
         all_positions.remove(self.base)
-
-        reachable = self._get_reachable_positions()
-        if fire_count + obstacle_count > len(reachable):
-            raise ValueError(f"Недостаточно достижимых позиций: {len(reachable)}")
-
-        fires = set(random.sample(list(reachable), fire_count))
-        obstacles = set(random.sample(list(reachable - fires), obstacle_count))
+        fires = set(random.sample(list(all_positions), fire_count))
+        all_positions -= fires
+        obstacles = set(random.sample(list(all_positions), obstacle_count))
         return fires, obstacles
-
-    def _get_reachable_positions(self) -> set:
-        """Возвращает множество позиций, достижимых от базы."""
-        queue = deque([self.base])
-        reachable = {self.base}
-        while queue:
-            x, y = queue.popleft()
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                nx, ny = x + dx, y + dy
-                if (nx, ny) in {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)} - reachable:
-                    reachable.add((nx, ny))
-                    queue.append((nx, ny))
-        return reachable - {self.base}
 
     def update_distances_to_fires(self) -> None:
         """Обновляет расстояния от текущей позиции до всех пожаров."""
@@ -104,22 +86,22 @@ class FireEnv(gym.Env):
             [abs(x - self.position[0]) + abs(y - self.position[1]) for x, y in self.fires]
         ) if self.fires else []
 
-    def get_local_view(self) -> np.ndarray:
+    def get_local_view(self) -> np.array:
         """Возвращает локальное представление агента (5x5)."""
-        px, py = self.position
-        view_size = 2
+        pos_x, pos_y = self.position
+        view_size = self.view // 2
         local_view = np.zeros((self.view, self.view), dtype=np.int32)
 
         for dx in range(-view_size, view_size + 1):
             for dy in range(-view_size, view_size + 1):
-                nx, ny = px + dx, py + dy
-                if 0 <= nx < self.grid_size and 0 <= ny < self.grid_size:
-                    if (nx, ny) in self.fires:
-                        local_view[dx + 2, dy + 2] = 1
-                    elif (nx, ny) in self.obstacles:
-                        local_view[dx + 2, dy + 2] = 2
-                    elif (nx, ny) == self.base:
-                        local_view[dx + 2, dy + 2] = 3
+                x, y = pos_x + dx, pos_y + dy
+                if 0 <= x < self.grid_size and 0 <= y < self.grid_size:
+                    if (x, y) in self.fires:
+                        local_view[dx + view_size, dy + view_size] = 1
+                    elif (x, y) in self.obstacles:
+                        local_view[dx + view_size, dy + view_size] = 2
+                    elif (x, y) == self.base:
+                        local_view[dx + view_size, dy + view_size] = 3
         return local_view.flatten()
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict]:
@@ -129,11 +111,11 @@ class FireEnv(gym.Env):
         if self.iteration_count == 1:
             logging.info("Эпизод начался")
 
-        reward = self._take_action(action)
-        reward += self._apply_additional_rewards()
+        reward, done = self._take_action(action)
+        reward += self.check_progress()
 
-        reward += e.STEP_PENALTY
-        logging.info(f'STEP_PENALTY = {e.STEP_PENALTY}')
+        # reward += e.STEP_PENALTY
+        # logging.info(f'STEP_PENALTY = {e.STEP_PENALTY}')
 
         if len(self.fires) == 0:
             reward += e.FINAL_REWARD
@@ -152,58 +134,58 @@ class FireEnv(gym.Env):
         state = self._get_state()
         return state, reward, done, False, {}
 
-    def _take_action(self, action: int) -> float:
+    def _take_action(self, action: int) -> (float, bool):
         """Обрабатывает действие агента (движение или тушение)."""
         reward = 0
-        if action == 4:  # Тушение
-            if self.position in self.fires and self.extinguisher_count > 0:
-                self.fires.remove(self.position)
-                self.extinguisher_count -= 1
-                self.update_distances_to_fires()
-                self.steps_without_progress = 0
-                reward = e.FIRE_REWARD
-                logging.info(f'FIRE_REWARD = {e.FIRE_REWARD}')
-                logging.info(f"Очаг потушен на {self.position}! Осталось очагов: {len(self.fires)}")
-            else:
-                reward = e.NO_EXTINGUISHER_PENALTY
-                logging.info(f'NO_EXTINGUISHER_PENALTY = {e.NO_EXTINGUISHER_PENALTY}')
-                self.steps_without_progress += 1
-        else:  # Движение
-            dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
-            new_pos = (self.position[0] + dx, self.position[1] + dy)
+        done = False
+        dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
+        new_pos = (self.position[0] + dx, self.position[1] + dy)
+        self.battery_level -= 1
+        distance_old = self.distances_to_fires[0]
 
-            crash_penalty, is_crash = self.check_crashes(new_pos)
-            reward += crash_penalty
-            if not is_crash:
-                if self.battery_level > 0:
-                    self.battery_level -= 1
+        if new_pos in self.fires:# and self.extinguisher_count > 0:
+            self.fires.remove(new_pos)
+            self.extinguisher_count -= 1
+            self.steps_without_progress = 0
+            reward = e.FIRE_REWARD
+            self.position = new_pos
+            self.update_distances_to_fires()
+            logging.info(f'FIRE_REWARD = {e.FIRE_REWARD}')
+            logging.info(f"Очаг потушен на {new_pos}! Осталось очагов: {len(self.fires)}")
 
-                distance_old = self.distances_to_fires[0] if self.distances_to_fires else float('inf')
-                # base_dist_old = abs(self.position[0] - self.base[0]) + abs(self.position[1] - self.base[1])
-                self.position = new_pos
-                self.update_distances_to_fires()
-                distance_new = self.distances_to_fires[0] if self.distances_to_fires else float('inf')
-                # base_dist_new = abs(self.position[0] - self.base[0]) + abs(self.position[1] - self.base[1])
+        elif not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
+            reward = e.OUT_OF_BOUNDS_PENALTY
+            logging.info(f'OUT_OF_BOUNDS_PENALTY = {e.OUT_OF_BOUNDS_PENALTY} {self.position}')
+            self.steps_without_progress += 1
 
-                reward += self.check_dist_from_fires(distance_old, distance_new)
+        elif new_pos in self.obstacles:
+            reward = e.OBSTACLE_PENALTY
+            logging.info(f'OBSTACLE_PENALTY = {e.OBSTACLE_PENALTY}')
+            self.steps_without_progress += 1
+            # done = True
+        else:
+            self.position = new_pos
+            self.update_distances_to_fires()
+            distance_new = self.distances_to_fires[0]
+            reward += self.check_dist_from_fires(distance_old, distance_new)
 
+            if self.battery_level < e.BATTERY_THRESHOLD or self.extinguisher_count == 0:
                 if self.position == self.base:
-                    if self.battery_level < e.BATTERY_THRESHOLD:
-                        self.battery_level = min(e.MAX_BATTERY, self.battery_level + e.BASE_RECHARGE)
-                        reward += e.BASE_BONUS
-                        logging.info(f'BASE CHARGE = {e.BASE_BONUS}')
+                    self.battery_level = min(e.MAX_BATTERY, self.battery_level + e.BASE_RECHARGE)
+                    reward += e.BASE_BONUS
+                    logging.info(f'BASE CHARGE = {e.BASE_BONUS}')
                     self.extinguisher_count = 1
-        return reward
+                else:
+                    reward -= e.STEP_PENALTY
+                    logging.info(f'BASE - CHARGE = {- e.STEP_PENALTY}')
+
+        return reward, done
 
     def check_dist_from_fires(self, distance_old, distance_new):
         reward = 0
         if distance_new < distance_old:
-            if self.extinguisher_count == 0:
-                reward += 1
-                logging.info(f'distance_new < distance_old = 10')
-            else:
-                reward += 3
-                logging.info(f'distance_new < distance_old = 30')
+            reward += 5
+            logging.info(f'distance_new < distance_old = 5')
             self.steps_without_progress = 0
         elif distance_new > distance_old:
             reward -= 5
@@ -211,30 +193,9 @@ class FireEnv(gym.Env):
             self.steps_without_progress += 1
         return reward
 
-    def check_crashes(self, new_pos: tuple[int | Any, int | Any]) -> tuple[float, bool]:
-        reward = 0
-        crash = False
-        if not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
-            reward = e.OUT_OF_BOUNDS_PENALTY
-            logging.info(f'OUT_OF_BOUNDS_PENALTY = {e.OUT_OF_BOUNDS_PENALTY}')
-            self.steps_without_progress += 1
-            crash = True
-        elif new_pos in self.obstacles:
-            reward = e.OBSTACLE_PENALTY
-            logging.info(f'OBSTACLE_PENALTY = {e.OBSTACLE_PENALTY}')
-            self.steps_without_progress += 1
-            crash = True
-        return reward, crash
-
-    def _apply_additional_rewards(self) -> float:
+    def check_progress(self) -> float:
         """Применяет дополнительные награды и штрафы."""
         reward = 0
-        # px, py = self.position
-        # for fx, fy in self.fires:
-        #     if abs(px - fx) <= 2 and abs(py - fy) <= 2:
-        #         reward += e.NEAR_FIRE_BONUS
-        #         logging.info(f'NEAR_FIRE_BONUS  = {e.NEAR_FIRE_BONUS}')
-        #         break
         if self.steps_without_progress > e.STAGNATION_THRESHOLD:
             reward += e.STAGNATION_PENALTY
             logging.info(f'STAGNATION_PENALTY  = {e.STAGNATION_PENALTY}')
@@ -242,27 +203,26 @@ class FireEnv(gym.Env):
 
     def _get_state(self) -> np.ndarray:
         local_view = self.get_local_view()
-        base_distances = [
-            self.position[0] - self.base[0],
-            self.position[1] - self.base[1]
-        ]
+        x, y = self.position
+
+        base_distances = [x - self.base[0], y - self.base[1]]
+
         nearest_fire = min(
-            self.fires, key=lambda f: abs(f[0] - self.position[0]) + abs(f[1] - self.position[1])) \
+            self.fires, key=lambda f: abs(f[0] - x) + abs(f[1] - y))\
             if self.fires else (0, 0)
-        fire_distances = [
-            self.position[0] - nearest_fire[0],
-            self.position[1] - nearest_fire[1]
-        ]
-        distances = (self.distances_to_fires + [0] *
-                     (e.MAX_ELEMENTS - self.obstacle_count - len(self.distances_to_fires)))
-        # Добавляем индикатор необходимости базы
-        base_priority = 1.0 if (self.extinguisher_count == 0 or self.battery_level < e.BATTERY_THRESHOLD) else 0.0
+        fire_distances = [x - nearest_fire[0], y - nearest_fire[1]]
+
+        distances = self.distances_to_fires + (self.fire_count - len(self.distances_to_fires)) * [0]
+
+        # индикатор необходимости базы
+        base_priority = 1 if (self.extinguisher_count == 0 or self.battery_level < e.BATTERY_THRESHOLD) else 0
+
         state = np.concatenate([
             np.array([
                          self.battery_level,
                          self.extinguisher_count,
                          len(self.fires),
-                         base_priority,  # Новый элемент состояния
+                         base_priority,
                      ] + base_distances + fire_distances, dtype=np.float32),
             np.array(distances, dtype=np.float32),
             local_view.astype(np.float32)
@@ -296,6 +256,9 @@ class FireEnv(gym.Env):
     def close(self) -> None:
         if self.render_mode == "human" and hasattr(self, 'screen'):
             from render.user_interface import show_summary_window
-            show_summary_window(self.fire_count, self.obstacle_count, self.iteration_count, self.total_reward)
+            show_summary_window(self.fire_count,
+                                self.fire_count - len(self.fires),
+                                self.obstacle_count,
+                                self.iteration_count,
+                                self.total_reward)
             del self.screen
-

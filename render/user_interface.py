@@ -1,14 +1,10 @@
-from typing import Dict
-
 import pygame
 from pygame import Surface, SurfaceType
-
-import constants.colors as colors
 import tkinter as tk
 from tkinter import messagebox
 
-# Константы для Pygame
-FONT_SIZE = 36
+from render import WEIGHT, HEIGHT, FONT_SIZE
+import constants.colors as colors
 
 # Глобальная переменная для отслеживания состояния Pygame
 pygame_initialized = False
@@ -75,15 +71,16 @@ def show_input_window():
     return result[0], result[1]
 
 
-def show_summary_window(fire_count, obstacle_count, iteration_count, total_reward):
+def show_summary_window(fire_count, fire_done, obstacle_count, iteration_count, total_reward):
     """Отображает итоговое окно с информацией о завершенной игре."""
     global pygame_initialized
-    screen, font = init_pygame((400, 300), "Итоги игры")
+    screen, font = init_pygame((WEIGHT, HEIGHT), "Итоги игры")
 
     screen.fill(colors.WHITE)
     lines = [
         f"Итераций: {iteration_count}",
         f"Очагов: {fire_count}",
+        f"Потушено: {fire_done}",
         f"Препятствий: {obstacle_count}",
         f"Награда: {total_reward}"
     ]
@@ -138,7 +135,7 @@ def quit_pygame():
         pygame_initialized = False
 
 
-def _load_images(cell_size) -> dict[str, Surface | SurfaceType]:
+def load_images(cell_size) -> dict[str, Surface | SurfaceType]:
     """Загружает и масштабирует изображения для рендеринга."""
     try:
         images = {
