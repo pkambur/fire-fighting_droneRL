@@ -7,46 +7,9 @@ from datetime import datetime
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
-from render.user_interface import show_input_window, show_test_prompt_window
+from stable_baselines3.common.callbacks import EvalCallback
+from render.user_interface import show_input_window, show_test_prompt_window, quit_pygame
 from envs.fire_env import FireEnv
-
-
-class TrainingLogCallback(BaseCallback):
-    def __init__(self, verbose=0, log_file="./logs/training_logs.csv"):
-        super(TrainingLogCallback, self).__init__(verbose)
-        self.log_file = log_file
-        self.step_count = 0
-        if not os.path.exists(self.log_file):
-            with open(self.log_file, mode='w', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(["Timestep", "Mean Reward", "Episode Length", "Fires Left"])
-
-    def _on_step(self) -> bool:
-        self.step_count += 1
-        if self.step_count % 1000 == 0:
-            env = self.training_env.envs[0]
-            while hasattr(env, 'env'):
-                env = env.env
-
-            try:
-                mean_reward, _ = evaluate_policy(self.model, self.training_env, n_eval_episodes=1, deterministic=True)
-                episode_length = env.iteration_count
-                fires_left = len(env.fires)
-            except AttributeError as e:
-                print(f"Ошибка доступа к атрибутам среды: {e}")
-                mean_reward = evaluate_policy(self.model, self.training_env, n_eval_episodes=1, deterministic=True)[0]
-                episode_length = self.step_count
-                fires_left = -1
-
-            with open(self.log_file, mode='a', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow([self.num_timesteps, mean_reward, episode_length, fires_left])
-
-            print(f"Логирование на шаге {self.num_timesteps}: Mean Reward = {mean_reward},"
-                  f" Fires Left = {fires_left}")
-        return True
-
 
 summary_shown = False
 
@@ -59,13 +22,9 @@ def run():
 
     with open(log_csv, mode='w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(["Шаг", "Заряд", "Средства", "Очагов осталось", "Вознаграждение", "Действие"])
+        writer.writerow(["Episode", "Шаг", "Заряд", "Средства", "Очагов осталось", "Вознаграждение", "Действие"])
 
     fire_count, obstacle_count = show_input_window()
-
-    if fire_count is None or obstacle_count is None:
-        print("Программа завершена пользователем.")
-        return
 
     logging.info("Начинаем обучение модели...")
     model = train_and_evaluate(fire_count, obstacle_count)
@@ -73,55 +32,57 @@ def run():
 
     if show_test_prompt_window():
         test_env = FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode="human")
-        obs, _ = test_env.reset()
-        total_reward = 0
-        iteration_count = 0
-        rewards = []
 
         logging.info("Начинаем тест модели...")
-        while True:
-            action, _ = model.predict(obs)
-            logging.info(f"Выбрано действие: {action}")
-            obs, reward, terminated, truncated, info = test_env.step(action)
-            total_reward += reward
-            iteration_count += 1
-            rewards.append(reward)
+        for episode in range(1, 5):
+            obs, _ = test_env.reset()
+            total_reward = 0
+            rewards = []
+            while True:
+                action, _ = model.predict(obs)
+                logging.info(f"Выбрано действие: {action}")
+                obs, reward, terminated, truncated, info = test_env.step(action)
+                total_reward += reward
+                rewards.append(reward)
 
-            log_message = [iteration_count, test_env.battery_level, test_env.extinguisher_count,
-                           len(test_env.fires), reward, action]
-            with open(log_csv, mode='a', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(log_message)
+                with open(log_csv, mode='a', newline='') as file:
+                    writer = csv.writer(file)
+                    writer.writerow([episode, test_env.iteration_count, test_env.battery_level,
+                                     test_env.extinguisher_count,
+                                     len(test_env.fires), reward, action])
 
-            logging.info(f"Шаг {test_env.iteration_count + 1}: Награда = {reward}, Общая награда = {total_reward}, "
-                         f"Очагов осталось: {len(test_env.fires)}, Батарея: {test_env.battery_level}, "
-                         f"Огнетушителей: {test_env.extinguisher_count}")
-            test_env.render()
+                logging.info(f"Eposode = {episode},"
+                             f" Шаг {test_env.iteration_count + 1}:"
+                             f" Награда = {reward},"
+                             f" Общая награда = {total_reward}, "
+                             f"Очагов осталось:{len(test_env.fires)}, "
+                             f"Батарея: {test_env.battery_level}, "
+                             f"Огнетушителей: {test_env.extinguisher_count}")
+                test_env.render()
 
-            if terminated or truncated:
-                if len(test_env.fires) == 0:
-                    print(f"Тестирование завершено на шаге {test_env.iteration_count}:"
-                          f" Все очаги потушены! Общая награда: {total_reward}")
-                elif test_env.battery_level <= 0:
-                    print(f"Тестирование завершено на шаге {test_env.iteration_count}:"
-                          f" Батарея разрядилась! Общая награда: {total_reward}")
-                elif test_env.iteration_count + 1 >= test_env.max_steps:
-                    print(f"Тестирование завершено на шаге {test_env.iteration_count}:"
-                          f" Достигнут лимит шагов. Общая награда: {total_reward}")
-                else:
-                    print(f"Тестирование завершено на шаге {test_env.iteration_count} по "
-                          f"неизвестной причине. Общая награда: {total_reward}")
-                if not summary_shown:
-                    test_env.close()  # Вызываем close только один раз
-                    summary_shown = True
-                break
+                if terminated or truncated:
+                    if len(test_env.fires) == 0:
+                        print(f"Тестирование завершено на шаге {test_env.iteration_count}:"
+                              f" Все очаги потушены! Общая награда: {total_reward}")
+                    # elif test_env.battery_level <= 0:
+                    #     print(f"Тестирование завершено на шаге {test_env.iteration_count}:"
+                    #           f" Батарея разрядилась! Общая награда: {total_reward}")
+                    elif test_env.iteration_count + 1 >= test_env.max_steps:
+                        print(f"Тестирование завершено на шаге {test_env.iteration_count}:"
+                              f" Достигнут лимит шагов. Общая награда: {total_reward}")
+                    else:
+                        print(f"Тестирование завершено на шаге {test_env.iteration_count} по "
+                              f"неизвестной причине. Общая награда: {total_reward}")
+                    if not summary_shown:
+                        test_env.close()  # Вызываем close только один раз
+                        summary_shown = True
+                    break
 
         if not summary_shown:
             test_env.close()  # Закрываем среду, если не было вызова ранее
             summary_shown = True
 
     # Завершаем Pygame в конце программы
-    from render.user_interface import quit_pygame
     quit_pygame()
 
 
@@ -148,6 +109,7 @@ def train_and_evaluate(fire_count, obstacle_count):
         clip_range=0.2,
         # ent_coef=0.05,
         clip_range_vf=0.2,
+        # vf_coef=0.7,
         tensorboard_log=log_dir
     )
 
@@ -156,7 +118,6 @@ def train_and_evaluate(fire_count, obstacle_count):
         best_model_save_path="./data/best_model/",
         log_path=log_dir,
         eval_freq=1000,
-        deterministic=True,
         render=False
     )
 

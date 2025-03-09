@@ -106,33 +106,33 @@ class FireEnv(gym.Env):
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict]:
         self.iteration_count += 1
-        done = False
+        terminated, truncated = False, False
 
         if self.iteration_count == 1:
             logging.info("Эпизод начался")
 
-        reward, done = self._take_action(action)
+        reward, truncated = self._take_action(action)
         # reward += self.check_progress()
 
         reward += e.STEP_PENALTY
         logging.info(f'STEP_PENALTY = {e.STEP_PENALTY}')
 
         if len(self.fires) == 0:
-            reward += e.FINAL_REWARD
-            logging.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
-            done = True
-        elif self.battery_level <= 0:
-            done = True
-            reward += e.BATTERY_PENALTY
-            logging.info(f'BATTERY_PENALTY = {e.BATTERY_PENALTY}')
+            terminated = True
+            if self.iteration_count < self.max_steps // 2:
+                reward += e.FINAL_REWARD * 2
+                logging.info(f'FINAL_REWARD = {e.FINAL_REWARD * 2}')
+            else:
+                reward += e.FINAL_REWARD
+                logging.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
         elif self.iteration_count >= self.max_steps:
-            reward -= 1000
-            logging.info(f'MAX_STEPS DONE = 1000')
-            done = True
+            reward -= e.FINAL_REWARD
+            logging.info(f'MAX_STEPS DONE = {-e.FINAL_REWARD}')
+            truncated = True
 
         self.total_reward += reward
         state = self._get_state()
-        return state, reward, done, False, {}
+        return state, reward, terminated, truncated, {}
 
     def _take_action(self, action: int) -> (float, bool):
         """Обрабатывает действие агента (движение или тушение)."""
@@ -144,11 +144,12 @@ class FireEnv(gym.Env):
         new_pos = (self.position[0] + dx, self.position[1] + dy)
         # distance_old = self.distances_to_fires[0]
 
-        # if self.battery_level < 10 or self.extinguisher_count == 0:
-        #     self.position = self.base
-        #     self.battery_level = e.MAX_BATTERY
-        #     self.extinguisher_count = 1
-        #     return reward, done
+        if self.battery_level < 10 or self.extinguisher_count == 0:
+            self.position = self.base
+            self.battery_level = e.MAX_BATTERY
+            self.extinguisher_count = 1
+            logging.info('Base charge')
+            return reward, done
 
         if new_pos in self.fires:
             self.fires.remove(new_pos)
@@ -175,12 +176,6 @@ class FireEnv(gym.Env):
             self.update_distances_to_fires()
             # distance_new = self.distances_to_fires[0]
             # reward += self.check_dist_from_fires(distance_old, distance_new)
-
-            # if self.position == self.base:
-            #     if self.battery_level > e.BATTERY_THRESHOLD:
-            #         self.battery_level = min(e.MAX_BATTERY, self.battery_level + e.BASE_RECHARGE)
-            #         reward -= e.BASE_BONUS
-            #         logging.info(f'BASE - CHARGE = {- e.BASE_BONUS}')
 
         logging.info(f'Position= {self.position}')
         return reward, done
