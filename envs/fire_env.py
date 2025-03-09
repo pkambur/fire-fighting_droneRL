@@ -23,7 +23,7 @@ class FireEnv(gym.Env):
         self.screen_size = self.grid_size * self.cell_size
         self.base = e.BASE_POSITION
         self.position = None
-        self.battery_level = None
+        self.battery_level = e.MAX_BATTERY
         self.extinguisher_count = None
         self.render_mode = render_mode
         self.steps_without_progress = None
@@ -144,11 +144,11 @@ class FireEnv(gym.Env):
         new_pos = (self.position[0] + dx, self.position[1] + dy)
         # distance_old = self.distances_to_fires[0]
 
-        if self.battery_level < 10 or self.extinguisher_count == 0:
-            self.position = self.base
-            self.battery_level = e.MAX_BATTERY
-            self.extinguisher_count = 1
-            return reward, done
+        # if self.battery_level < 10 or self.extinguisher_count == 0:
+        #     self.position = self.base
+        #     self.battery_level = e.MAX_BATTERY
+        #     self.extinguisher_count = 1
+        #     return reward, done
 
         if new_pos in self.fires:
             self.fires.remove(new_pos)
