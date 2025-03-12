@@ -74,14 +74,15 @@ def train_and_evaluate(fire_count, obstacle_count):
         "MlpPolicy",
         vec_env,
         verbose=1,
-        learning_rate=0.0001,
+        learning_rate=0.0003,
         n_steps=2048,
         batch_size=128,
-        n_epochs=3,
+        n_epochs=5,
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
         clip_range_vf=0.2,
+        ent_coef=0.01,
         tensorboard_log=log_dir
     )
     eval_callback = EvalCallback(

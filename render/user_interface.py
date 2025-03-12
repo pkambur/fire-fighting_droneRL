@@ -24,15 +24,15 @@ def draw_text(screen, text, font, color, x, y, center=False):
 
 def show_input_window():
     root = tk.Tk()
-    root.title("Game Settings")
+    root.title("Настройки игры")
     root.geometry("300x300")
-    tk.Label(root, text="10x10 Grid", font=("Arial", 12)).pack(pady=10)
-    tk.Label(root, text="Enter:", font=("Arial", 10)).pack(pady=5)
+    tk.Label(root, text="Поле 10x10", font=("Arial", 12)).pack(pady=10)
+    tk.Label(root, text="Введите:", font=("Arial", 10)).pack(pady=5)
     fire_var = tk.StringVar()
     obstacle_var = tk.StringVar()
-    tk.Label(root, text="Fires").pack()
+    tk.Label(root, text="Очаги").pack()
     tk.Entry(root, textvariable=fire_var).pack()
-    tk.Label(root, text="Obstacles").pack()
+    tk.Label(root, text="Препятствия").pack()
     tk.Entry(root, textvariable=obstacle_var).pack()
     result = [None, None]  # [fire, obstacles]
 
@@ -49,7 +49,7 @@ def show_input_window():
         except ValueError:
             messagebox.showerror("Ошибка", "Вводить только цифры!")
 
-    tk.Button(root, text="Confirm", command=submit).pack(pady=10)
+    tk.Button(root, text="Начать", command=submit).pack(pady=10)
     root.mainloop()
     root.destroy()
     if result[0] is None or result[1] is None:
@@ -61,11 +61,11 @@ def show_summary_window(fire_count, fire_done, obstacle_count, iteration_count, 
     screen, font = init_pygame((WEIGHT, HEIGHT), "Game Summary")
     screen.fill(colors.WHITE)
     lines = [
-        f"Iterations: {iteration_count}",
-        f"Fires: {fire_count}",
-        f"Extinguished: {fire_done}",
-        f"Obstacles: {obstacle_count}",
-        f"Total Reward: {total_reward}"
+        f"Количество итераций: {iteration_count}",
+        f"Количество очагов: {fire_count}",
+        f"Потушено: {fire_done}",
+        f"Препятствий: {obstacle_count}",
+        f"Суммарная награда: {total_reward}"
     ]
     for i, line in enumerate(lines):
         draw_text(screen, line, font, colors.BLACK, 50, 50 + i * 40)
