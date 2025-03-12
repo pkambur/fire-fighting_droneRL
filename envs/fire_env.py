@@ -29,7 +29,7 @@ class FireEnv(gym.Env):
         self.steps_without_progress = None
         self.iteration_count = None
         self.total_reward = None
-        self.max_steps = 500
+        self.max_steps = 1000
         self.view = e.AGENT_VIEW
 
         if fire_count is None or obstacle_count is None:
@@ -134,7 +134,7 @@ class FireEnv(gym.Env):
         state = self._get_state()
         return state, reward, terminated, truncated, {}
 
-    def _take_action(self, action: int) -> (float, bool):
+    def _take_action(self, action: int) -> tuple[float, bool]:
         """Обрабатывает действие агента (движение или тушение)."""
         reward = 0
         self.battery_level -= 1
