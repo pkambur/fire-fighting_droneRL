@@ -176,9 +176,9 @@ def train_and_evaluate(fire_count, obstacle_count):
         "MlpPolicy",
         vec_env,
         verbose=1,
-        learning_rate=0.0003,
-        n_steps=2048,
-        batch_size=128,
+        learning_rate=0.0001,
+        n_steps=4096,
+        batch_size=256,
         n_epochs=5,
         gamma=0.99,
         gae_lambda=0.95,
@@ -196,6 +196,6 @@ def train_and_evaluate(fire_count, obstacle_count):
     )
     model.learn(total_timesteps=500000, progress_bar=True)
     mean_reward, std_reward = evaluate_policy(model, vec_env, n_eval_episodes=10)
-    print(f"Mean reward after training: {mean_reward} +/- {std_reward}")
+    print(f"Среднее вознаграждение после тренировки: {mean_reward} +/- {std_reward}")
     model.save("ppo_fire_model")
     return model

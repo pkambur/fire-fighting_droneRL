@@ -13,7 +13,7 @@ AGENT_VIEW = 5
 
 # Награды и штрафы
 STEP_PENALTY = -1  #  штраф за шаг
-FIRE_REWARD = 300  #  награда за тушение
+FIRE_REWARD = 500  #  награда за тушение
 OBSTACLE_PENALTY = -100  #  штраф за препятствие
 OUT_OF_BOUNDS_PENALTY = -5  #  штраф за выход за границы
 BASE_PENALTY = 50
@@ -24,6 +24,6 @@ NO_EXTINGUISHER_PENALTY = -10  # штраф за неудачное тушени
 BASE_BONUS = 100  #  бонус за базу
 STAGNATION_THRESHOLD = 10  #  порог застоя
 STAGNATION_PENALTY = -5  #  штраф за застой
-FINAL_REWARD = 1000  #  награда за тушение всех пожаров
+FINAL_REWARD = 2000  #  награда за тушение всех пожаров
 EXTINGUISHER_RECHARGE_BONUS = 50  # бонус за пополнение огнетушителя
 BATTERY_PENALTY = -500
