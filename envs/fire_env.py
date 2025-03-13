@@ -20,15 +20,17 @@ class FireEnv(gym.Env):
         self.screen_size = self.grid_size * self.cell_size
         self.base = e.BASE_POSITION
         self.positions = [self.base, (1, 9), (2, 9)]  # Начальные позиции 3 агентов
-        self.battery_levels = [e.MAX_BATTERY] * 3
-        self.extinguisher_counts = [1] * 3
+        self.num_agents = 3
+        self.battery_levels = [e.MAX_BATTERY] * self.num_agents
+        self.extinguisher_counts = [1] * self.num_agents
         self.render_mode = render_mode
-        self.steps_without_progress = [0] * 3
+        self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
         self.total_reward = 0
         self.max_steps = 1000
         self.view = e.AGENT_VIEW
         self.distances_to_fires = None
+        self.distances_to_obstacles = None
 
         if fire_count is None or obstacle_count is None:
             fire_count, obstacle_count = show_input_window()
@@ -43,13 +45,19 @@ class FireEnv(gym.Env):
         # Пространство наблюдений для observer
         local_view_size = self.view ** 2
         low = np.array(
-            [0] * 3 + [0] * 3 + [0] + [-self.grid_size, -self.grid_size] * 3 +
-            [0] * (self.fire_count) + [0] * (local_view_size * 3),
+            [0] * self.num_agents + [0] * self.num_agents + [0] +
+            [-self.grid_size, -self.grid_size] * self.num_agents +
+            [0] * self.fire_count + [0] * self.obstacle_count * self.num_agents +
+            [0] * (local_view_size * self.num_agents),
             dtype=np.float32
         )
+
         high = np.array(
-            [e.MAX_BATTERY] * 3 + [1] * 3 + [fire_count] + [self.grid_size, self.grid_size] * 3 +
-            [2 * self.grid_size] * self.fire_count + [3] * (local_view_size * 3),
+            [e.MAX_BATTERY] * self.num_agents + [1] * self.num_agents +
+            [self.fire_count] + [self.grid_size, self.grid_size] * self.num_agents +
+            [2 * self.grid_size] * self.fire_count +
+            [2 * self.grid_size] * self.obstacle_count * self.num_agents +
+            [3] * (local_view_size * self.num_agents),
             dtype=np.float32
         )
         self.observation_space = Box(low=low, high=high, dtype=np.float32)
@@ -58,13 +66,13 @@ class FireEnv(gym.Env):
         if seed is not None:
             np.random.seed(seed)
         self.positions = [self.base, (1, 9), (2, 9)]
-        self.battery_levels = [e.MAX_BATTERY] * 3
-        self.extinguisher_counts = [1] * 3
-        self.steps_without_progress = [0] * 3
+        self.battery_levels = [e.MAX_BATTERY] * self.num_agents
+        self.extinguisher_counts = [1] * self.num_agents
+        self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
         self.total_reward = 0
         self.fires, self.obstacles = self.generate_positions(self.fire_count, self.obstacle_count)
-        self.update_distances_to_fires()
+        self.update_distances()
         return self._get_state(), {}
 
     def generate_positions(self, fire_count: int, obstacle_count: int) -> tuple[set, set]:
@@ -75,10 +83,12 @@ class FireEnv(gym.Env):
         obstacles = set(random.sample(list(all_positions), obstacle_count))
         return fires, obstacles
 
-    def update_distances_to_fires(self) -> None:
+    def update_distances(self) -> None:
         self.distances_to_fires = sorted(
             [min(abs(x - pos[0]) + abs(y - pos[1]) for pos in self.positions) for x, y in self.fires]
         ) if self.fires else []
+        self.distances_to_obstacles = [abs(x - pos[0]) + abs(y - pos[1]) for pos
+                                       in self.positions for x, y in self.obstacles]
 
     def get_local_view(self, agent_idx: int) -> np.ndarray:
         pos_x, pos_y = self.positions[agent_idx]
@@ -137,60 +147,71 @@ class FireEnv(gym.Env):
         dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
         new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
 
-        if self.battery_levels[agent_idx] < 10 or self.extinguisher_counts[agent_idx] == 0:
-            self.positions[agent_idx] = self.base
-            self.battery_levels[agent_idx] = e.MAX_BATTERY
-            self.extinguisher_counts[agent_idx] = 1
-            logging.info(f'Agent {agent_idx} recharged at base')
-            return reward, done
+        penalty, collision = self._check_collisions(new_pos, agent_idx)
+        if collision:
+            reward += penalty
 
-        if new_pos in [self.positions[i] for i in range(3) if i != agent_idx]:
-            reward = e.OBSTACLE_PENALTY
-            logging.info(f'Agent {agent_idx} collision with another agent: {e.OBSTACLE_PENALTY}')
-            self.steps_without_progress[agent_idx] += 1
-            return reward, done
-
-        if new_pos in self.fires:
+        elif new_pos in self.fires:
             self.fires.remove(new_pos)
             self.extinguisher_counts[agent_idx] -= 1
             self.steps_without_progress[agent_idx] = 0
             reward = e.FIRE_REWARD
             self.positions[agent_idx] = new_pos
-            self.update_distances_to_fires()
+            self.update_distances()
             logging.info(f'Agent {agent_idx} extinguished fire at {new_pos}: {e.FIRE_REWARD}')
-        elif not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
-            reward = e.OUT_OF_BOUNDS_PENALTY
-            logging.info(f'Agent {agent_idx} out of bounds: {e.OUT_OF_BOUNDS_PENALTY}')
-            self.steps_without_progress[agent_idx] += 1
-        elif new_pos in self.obstacles:
-            reward = e.OBSTACLE_PENALTY
-            logging.info(f'Agent {agent_idx} hit obstacle: {e.OBSTACLE_PENALTY}')
-            self.steps_without_progress[agent_idx] += 1
+
         else:
             self.positions[agent_idx] = new_pos
-            self.update_distances_to_fires()
+            self.update_distances()
 
+        self._recharge(agent_idx)
         logging.info(f'Agent {agent_idx} Position = {self.positions[agent_idx]}')
         return reward, done
 
+    def _recharge(self, agent_idx: int):
+        if self.battery_levels[agent_idx] < e.MIN_BATTERY or self.extinguisher_counts[agent_idx] == 0:
+            self.positions[agent_idx] = self.base
+            self.battery_levels[agent_idx] = e.MAX_BATTERY
+            self.extinguisher_counts[agent_idx] = 1
+            logging.info(f'Agent {agent_idx} recharged at base')
+
+    def _check_collisions(self, new_pos: tuple[int, int], agent_idx: int) -> tuple[float, bool]:
+        reward = 0
+        collision = False
+        if new_pos in [self.positions[i] for i in range(3) if i != agent_idx]:
+            reward = e.CRASH_PENALTY
+            logging.info(f'Agent {agent_idx} collision with another agent: {e.CRASH_PENALTY}')
+            collision = True
+        elif not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
+            reward = e.OUT_OF_BOUNDS_PENALTY
+            logging.info(f'Agent {agent_idx} out of bounds: {e.OUT_OF_BOUNDS_PENALTY}')
+            collision = True
+        elif new_pos in self.obstacles:
+            reward = e.OBSTACLE_PENALTY
+            logging.info(f'Agent {agent_idx} hit obstacle: {e.OBSTACLE_PENALTY}')
+            collision = True
+        if collision is True:
+            self.steps_without_progress[agent_idx] += 1
+        return reward, collision
+
     def _get_state(self) -> np.ndarray:
-        # Суммарное наблюдение для observer
-        local_views = [self.get_local_view(i) for i in range(3)]
+        base_distances = [[self.positions[i][0] - self.base[0], self.positions[i][1] - self.base[1]]
+                          for i in range(self.num_agents)]
+
         state_parts = [
             np.array(self.battery_levels + self.extinguisher_counts, dtype=np.float32),
             np.array([len(self.fires)], dtype=np.float32),
         ]
-        for i in range(3):
-            x, y = self.positions[i]
-            base_distances = [x - self.base[0], y - self.base[1]]
-            state_parts.append(np.array(base_distances, dtype=np.float32))
+        distances_to_fires = (self.distances_to_fires +
+                              [0] * (self.fire_count - len(self.distances_to_fires)))
 
-        distances_to_fires_array = np.array(
-            self.distances_to_fires + [0] * (self.fire_count - len(self.distances_to_fires)),
-            dtype=np.float32
-        )
+        state = np.concatenate(
+            state_parts +
+            base_distances +
+            [distances_to_fires] +
+            [self.distances_to_obstacles] +
+            [self.get_local_view(i) for i in range(self.num_agents)])
 
-        state = np.concatenate(state_parts + [distances_to_fires_array] + local_views)
         return state
 
     def render(self) -> None:

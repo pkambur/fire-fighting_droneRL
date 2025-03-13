@@ -1,5 +1,4 @@
 import pygame
-from pygame import Surface, SurfaceType
 import tkinter as tk
 from tkinter import messagebox
 from render import WEIGHT, HEIGHT, FONT_SIZE
@@ -28,7 +27,7 @@ def draw_text(screen, text, font, color, x, y, center=False):
 def show_input_window():
     root = tk.Tk()
     root.title("Настройки игры")
-    root.geometry("300x300")
+    root.geometry("350x350")
     tk.Label(root, text="Поле 10x10", font=("Arial", 12)).pack(pady=10)
     tk.Label(root, text="Введите:", font=("Arial", 10)).pack(pady=5)
     fire_var = tk.StringVar()
@@ -37,7 +36,7 @@ def show_input_window():
     tk.Entry(root, textvariable=fire_var).pack()
     tk.Label(root, text="Препятствия").pack()
     tk.Entry(root, textvariable=obstacle_var).pack()
-    result = [None, None]  # [fire, obstacles]
+    result = [None, None]
 
     def submit():
         try:
@@ -83,11 +82,12 @@ def show_summary_window(fire_count, fire_done, obstacle_count, iteration_count, 
 
 def show_test_prompt_window():
     global pygame_initialized
-    screen, font = init_pygame((400, 200), "Test Model")
+    screen, font = init_pygame((WEIGHT, WEIGHT // 2), "Test Model")
     screen.fill(colors.WHITE)
-    draw_text(screen, "Запустить тестирование модели?", font, colors.BLACK, 200, 40, center=True)
+    draw_text(screen, "Запустить тестирование модели?",
+              font, colors.BLACK, WEIGHT // 2, 40, center=True)
     yes_button = pygame.Rect(50, 100, 100, 50)
-    no_button = pygame.Rect(250, 100, 100, 50)
+    no_button = pygame.Rect(300, 100, 100, 50)
     pygame.draw.rect(screen, colors.GREEN, yes_button)
     pygame.draw.rect(screen, colors.RED, no_button)
     draw_text(screen, "Да", font, colors.BLACK, yes_button.centerx, yes_button.centery, center=True)
