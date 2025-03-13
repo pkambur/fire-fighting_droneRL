@@ -1,105 +1,3 @@
-# import os
-# import csv
-# import logging
-# from stable_baselines3 import PPO
-# from stable_baselines3.common.env_util import make_vec_env
-# from stable_baselines3.common.evaluation import evaluate_policy
-# from stable_baselines3.common.callbacks import EvalCallback
-# from render.user_interface import show_input_window, show_test_prompt_window, quit_pygame
-# from envs.fire_env import FireEnv
-
-# summary_shown = False
-
-# def run():
-#     global summary_shown
-#     log_csv = "./logs/logs.csv"
-#     if os.path.exists(log_csv):
-#         os.remove(log_csv)
-#     with open(log_csv, mode='w', newline='') as file:
-#         writer = csv.writer(file)
-#         writer.writerow(["Episode", "Step", "Battery1", "Battery2", "Battery3", 
-#                          "Extinguishers1", "Extinguishers2", "Extinguishers3", 
-#                          "Fires Left", "Reward", "Action1", "Action2", "Action3"])
-
-#     fire_count, obstacle_count = show_input_window()
-#     logging.info("Starting model training...")
-#     model = train_and_evaluate(fire_count, obstacle_count)
-#     logging.info("Training completed!")
-
-#     if show_test_prompt_window():
-#         test_env = FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode="human")
-#         logging.info("Starting model testing...")
-#         for episode in range(1, 5):
-#             obs, _ = test_env.reset()
-#             total_reward = 0
-#             while True:
-#                 actions, _ = model.predict(obs)  # Массив из 3 действий
-#                 obs, reward, terminated, truncated, info = test_env.step(actions)
-#                 total_reward += reward
-#                 with open(log_csv, mode='a', newline='') as file:
-#                     writer = csv.writer(file)
-#                     writer.writerow([episode, test_env.iteration_count] + 
-#                                    test_env.battery_levels + test_env.extinguisher_counts + 
-#                                    [len(test_env.fires), reward] + list(actions))
-#                 logging.info(f"Episode = {episode}, Step {test_env.iteration_count + 1}: "
-#                              f"Reward = {reward}, Total Reward = {total_reward}, "
-#                              f"Fires Left: {len(test_env.fires)}")
-#                 test_env.render()
-#                 if terminated or truncated:
-#                     if len(test_env.fires) == 0:
-#                         print(f"Testing completed at step {test_env.iteration_count}: "
-#                               f"All fires extinguished! Total Reward: {total_reward}")
-#                     elif test_env.iteration_count + 1 >= test_env.max_steps:
-#                         print(f"Testing completed at step {test_env.iteration_count}: "
-#                               f"Step limit reached. Total Reward: {total_reward}")
-#                     else:
-#                         print(f"Testing completed at step {test_env.iteration_count} "
-#                               f"for unknown reason. Total Reward: {total_reward}")
-#                     if not summary_shown:
-#                         test_env.close()
-#                         summary_shown = True
-#                     break
-#         if not summary_shown:
-#             test_env.close()
-#             summary_shown = True
-#     quit_pygame()
-
-# def train_and_evaluate(fire_count, obstacle_count):
-#     def make_env():
-#         return FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode=None)
-#     vec_env = make_vec_env(make_env, n_envs=1)
-#     log_dir = "./logs/ppo_tensorboard/"
-#     os.makedirs(log_dir, exist_ok=True)
-#     model = PPO(
-#         "MlpPolicy",
-#         vec_env,
-#         verbose=1,
-#         learning_rate=0.0003,
-#         n_steps=2048,
-#         batch_size=128,
-#         n_epochs=5,
-#         gamma=0.99,
-#         gae_lambda=0.95,
-#         clip_range=0.2,
-#         clip_range_vf=0.2,
-#         ent_coef=0.01,
-#         tensorboard_log=log_dir
-#     )
-#     eval_callback = EvalCallback(
-#         vec_env,
-#         best_model_save_path="./data/best_model/",
-#         log_path=log_dir,
-#         eval_freq=1000,
-#         render=False
-#     )
-#     model.learn(total_timesteps=500000, progress_bar=True)
-#     mean_reward, std_reward = evaluate_policy(model, vec_env, n_eval_episodes=10)
-#     print(f"Mean reward after training: {mean_reward} +/- {std_reward}")
-#     model.save("ppo_fire_model")
-#     return model
-
-
-
 import os
 import csv
 import logging
@@ -112,6 +10,7 @@ from envs.fire_env import FireEnv
 
 summary_shown = False
 
+
 def run():
     global summary_shown
     log_csv = "./logs/logs.csv"
@@ -119,8 +18,8 @@ def run():
         os.remove(log_csv)
     with open(log_csv, mode='w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(["Episode", "Step", "Battery1", "Battery2", "Battery3", 
-                         "Extinguishers1", "Extinguishers2", "Extinguishers3", 
+        writer.writerow(["Episode", "Step", "Battery1", "Battery2", "Battery3",
+                         "Extinguishers1", "Extinguishers2", "Extinguishers3",
                          "Fires Left", "Reward", "Action1", "Action2", "Action3"])
 
     fire_count, obstacle_count = show_input_window()
@@ -140,9 +39,9 @@ def run():
                 total_reward += reward
                 with open(log_csv, mode='a', newline='') as file:
                     writer = csv.writer(file)
-                    writer.writerow([episode, test_env.iteration_count] + 
-                                   test_env.battery_levels + test_env.extinguisher_counts + 
-                                   [len(test_env.fires), reward] + list(actions))
+                    writer.writerow([episode, test_env.iteration_count] +
+                                    test_env.battery_levels + test_env.extinguisher_counts +
+                                    [len(test_env.fires), reward] + list(actions))
                 logging.info(f"Episode = {episode}, Step {test_env.iteration_count + 1}: "
                              f"Reward = {reward}, Total Reward = {total_reward}, "
                              f"Fires Left: {len(test_env.fires)}")
@@ -166,9 +65,11 @@ def run():
             summary_shown = True
     quit_pygame()
 
+
 def train_and_evaluate(fire_count, obstacle_count):
     def make_env():
         return FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode=None)
+
     vec_env = make_vec_env(make_env, n_envs=1)
     log_dir = "./logs/ppo_tensorboard/"
     os.makedirs(log_dir, exist_ok=True)
@@ -194,7 +95,7 @@ def train_and_evaluate(fire_count, obstacle_count):
         eval_freq=1000,
         render=False
     )
-    model.learn(total_timesteps=500000, progress_bar=True)
+    model.learn(total_timesteps=50000, progress_bar=True)
     mean_reward, std_reward = evaluate_policy(model, vec_env, n_eval_episodes=10)
     print(f"Среднее вознаграждение после тренировки: {mean_reward} +/- {std_reward}")
     model.save("ppo_fire_model")

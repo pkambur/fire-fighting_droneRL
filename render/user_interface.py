@@ -7,6 +7,7 @@ import constants.colors as colors
 
 pygame_initialized = False
 
+
 def init_pygame(size, caption):
     global pygame_initialized
     if not pygame_initialized:
@@ -17,10 +18,12 @@ def init_pygame(size, caption):
     font = pygame.font.Font(None, FONT_SIZE)
     return screen, font
 
+
 def draw_text(screen, text, font, color, x, y, center=False):
     surface = font.render(text, True, color)
     rect = surface.get_rect(center=(x, y)) if center else (x, y)
     screen.blit(surface, rect)
+
 
 def show_input_window():
     root = tk.Tk()
@@ -56,6 +59,7 @@ def show_input_window():
         return None, None
     return result[0], result[1]
 
+
 def show_summary_window(fire_count, fire_done, obstacle_count, iteration_count, total_reward):
     global pygame_initialized
     screen, font = init_pygame((WEIGHT, HEIGHT), "Game Summary")
@@ -75,6 +79,7 @@ def show_summary_window(fire_count, fire_done, obstacle_count, iteration_count, 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
 
 def show_test_prompt_window():
     global pygame_initialized
@@ -100,22 +105,9 @@ def show_test_prompt_window():
                     choice = False
     return choice
 
+
 def quit_pygame():
     global pygame_initialized
     if pygame_initialized:
         pygame.quit()
         pygame_initialized = False
-
-def load_images(cell_size) -> dict[str, Surface | SurfaceType]:
-    try:
-        images = {
-            "base": pygame.transform.scale(pygame.image.load("data/images/base.jpg"), (cell_size, cell_size)),
-            "agent": pygame.transform.scale(pygame.image.load("data/images/agent.jpg"), (cell_size, cell_size)),
-            "fire": pygame.transform.scale(pygame.image.load("data/images/fire.jpg"), (cell_size, cell_size)),
-            "obstacle": pygame.transform.scale(pygame.image.load("data/images/tree.jpg"), (cell_size, cell_size)),
-        }
-        return images
-    except FileNotFoundError as e:
-        raise FileNotFoundError(f"Failed to load image: {e}")
-
-
