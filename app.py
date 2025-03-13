@@ -1,6 +1,6 @@
 import logging
-from tkinter import messagebox
 
+from tkinter import messagebox
 from stable_baselines3 import PPO
 
 from models.ppo import train_and_evaluate

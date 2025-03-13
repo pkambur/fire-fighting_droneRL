@@ -1,4 +1,6 @@
 import logging
+from collections import deque
+
 import gymnasium as gym
 import numpy as np
 import pygame
@@ -76,12 +78,37 @@ class FireEnv(gym.Env):
         return self._get_state(), {}
 
     def generate_positions(self, fire_count: int, obstacle_count: int) -> tuple[set, set]:
-        all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
-        all_positions -= {self.base, (1, 9), (2, 9)}
-        fires = set(random.sample(list(all_positions), fire_count))
-        all_positions -= fires
-        obstacles = set(random.sample(list(all_positions), obstacle_count))
+        check = 0
+        fires, obstacles = {}, {}
+        while check != fire_count:
+            all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
+            all_positions -= {self.base, (1, 9), (2, 9)}
+            fires = set(random.sample(list(all_positions), fire_count))
+            all_positions -= fires
+            obstacles = set(random.sample(list(all_positions), obstacle_count))
+            for fire in fires:
+                check += self._check_availability(self.base, fire, obstacles)
         return fires, obstacles
+
+    def _check_availability(self, start, end, obstacles):
+        start_x, start_y = start
+        end_x, end_y = end
+        queue = deque([(start_x, start_y)])
+        visited = [[0] * self.grid_size for _ in range(self.grid_size)]
+        visited[start_x][start_y] = True
+        while queue:
+            x, y = queue.popleft()
+            if x == end_x and y == end_y:
+                return True
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                nx, ny = x + dx, y + dy
+                if self.is_valid(nx, ny) and not visited[nx][ny] and (nx, ny) not in obstacles:
+                    visited[nx][ny] = True
+                    queue.append((nx, ny))
+        return False
+
+    def is_valid(self, x, y):
+        return 0 <= x < self.grid_size and 0 <= y < self.grid_size
 
     def update_distances(self) -> None:
         self.distances_to_fires = sorted(
@@ -119,8 +146,8 @@ class FireEnv(gym.Env):
             reward, _ = self._take_action(i, action)
             total_reward += reward
 
-        total_reward += e.STEP_PENALTY * 3
-        logging.info(f'STEP_PENALTY = {e.STEP_PENALTY * 3}')
+        total_reward += e.STEP_PENALTY * self.num_agents
+        logging.info(f'STEP_PENALTY = {e.STEP_PENALTY * self.num_agents}')
 
         if len(self.fires) == 0:
             terminated = True
