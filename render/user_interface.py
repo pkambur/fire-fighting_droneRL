@@ -104,7 +104,6 @@ def choice_window(caption: str, question: str, choices: list[str], button_width=
                 elif no_button.collidepoint(event.pos):
                     choice = False
     quit_pygame()
-
     return choice
 
 

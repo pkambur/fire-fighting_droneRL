@@ -1,5 +1,4 @@
-import models.ppo as ppo
-
+import app
 
 if __name__ == '__main__':
-    ppo.run()
+    app.run()
