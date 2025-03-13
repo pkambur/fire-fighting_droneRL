@@ -80,18 +80,18 @@ def show_summary_window(fire_count, fire_done, obstacle_count, iteration_count, 
                 running = False
 
 
-def show_test_prompt_window():
+def choice_window(caption: str, question: str, choices: list[str], button_width=100):
     global pygame_initialized
-    screen, font = init_pygame((WEIGHT, WEIGHT // 2), "Test Model")
+    screen, font = init_pygame((WEIGHT, WEIGHT // 2), caption)
     screen.fill(colors.WHITE)
-    draw_text(screen, "Запустить тестирование модели?",
+    draw_text(screen, question,
               font, colors.BLACK, WEIGHT // 2, 40, center=True)
-    yes_button = pygame.Rect(50, 100, 100, 50)
-    no_button = pygame.Rect(300, 100, 100, 50)
+    yes_button = pygame.Rect(50, 100, button_width, 50)
+    no_button = pygame.Rect(300, 100, button_width, 50)
     pygame.draw.rect(screen, colors.GREEN, yes_button)
     pygame.draw.rect(screen, colors.RED, no_button)
-    draw_text(screen, "Да", font, colors.BLACK, yes_button.centerx, yes_button.centery, center=True)
-    draw_text(screen, "Нет", font, colors.BLACK, no_button.centerx, no_button.centery, center=True)
+    draw_text(screen, choices[0], font, colors.BLACK, yes_button.centerx, yes_button.centery, center=True)
+    draw_text(screen, choices[1], font, colors.BLACK, no_button.centerx, no_button.centery, center=True)
     pygame.display.flip()
     choice = None
     while choice is None:
@@ -103,6 +103,24 @@ def show_test_prompt_window():
                     choice = True
                 elif no_button.collidepoint(event.pos):
                     choice = False
+    quit_pygame()
+
+    return choice
+
+
+def show_test_prompt_window():
+    caption = "Test Model"
+    question = "Запустить тестирование модели?"
+    choices = ["Да", "Нет"]
+    choice = choice_window(caption, question, choices)
+    return choice
+
+
+def show_start_window():
+    caption = "Choose Action"
+    question = "Сделайте выбор"
+    choices = ["Обучение", "Тест"]
+    choice = choice_window(caption, question, choices, button_width=120)
     return choice
 
 
