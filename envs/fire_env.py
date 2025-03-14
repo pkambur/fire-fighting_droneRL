@@ -35,6 +35,11 @@ class FireEnv(gym.Env):
         self.distances_to_fires = None
         self.distances_to_obstacles = None
 
+        self.wind_active = False
+        self.wind_direction = None
+        self.wind_strength = None
+        self.steps_from_last_wind = None
+
         if fire_count is None or obstacle_count is None:
             fire_count, obstacle_count = show_input_window()
         self.fire_count = fire_count
@@ -76,6 +81,10 @@ class FireEnv(gym.Env):
         self.total_reward = 0
         self.fires, self.obstacles = self.generate_positions(self.fire_count, self.obstacle_count)
         self.update_distances()
+        self.wind_active = False
+        self.wind_direction = None
+        self.wind_strength = 0
+        self.steps_from_last_wind = 0
         return self._get_state(), {}
 
     def generate_positions(self, fire_count: int, obstacle_count: int) -> tuple[set, set]:
@@ -173,8 +182,20 @@ class FireEnv(gym.Env):
         done = False
 
         dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
-        new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
+        x, y = self.positions[agent_idx]
+        x += dx
+        y += dy
+        # new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
 
+        if self.wind_active:
+            x += self.wind_strength * self.wind_direction[0]
+            y += self.wind_strength * self.wind_direction[1]
+            # чтобы не вылетал за границы от ветра
+            x = np.clip(x, 0, self.grid_size - 1)
+            y = np.clip(y, 0, self.grid_size - 1)
+
+        new_pos = (x,y)
+        print(new_pos)
         penalty, collision = self._check_collisions(new_pos, agent_idx)
         if collision:
             reward += penalty
@@ -203,7 +224,7 @@ class FireEnv(gym.Env):
             self.extinguisher_counts[agent_idx] = 1
             logging.info(f'Agent {agent_idx} recharged at base')
 
-    def _check_collisions(self, new_pos: tuple[int, int], agent_idx: int) -> tuple[float, bool]:
+    def _check_collisions(self, new_pos: tuple, agent_idx: int) -> tuple[float, bool]:
         reward = 0
         collision = False
         if new_pos in [self.positions[i] for i in range(3) if i != agent_idx]:
@@ -265,7 +286,7 @@ class FireEnv(gym.Env):
                                   self.screen_size)
         pygame.draw.rect(self.screen, WHITE, status_info)
         draw_text(self.screen, "Game info", font, BLACK, self.screen_size, 20)
-        draw_text(self.screen, f"Step {self.iteration_count}", font, BLACK, self.screen_size, 50)
+        draw_text(self.screen, f"Step {self.iteration_count}", font, BLACK, self.screen_size, 60)
         pygame.display.flip()
         pygame.time.delay(100)
 
