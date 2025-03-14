@@ -1,6 +1,9 @@
 import pygame
 import tkinter as tk
 from tkinter import messagebox
+
+from pygame import Surface
+
 from render import WEIGHT, HEIGHT, FONT_SIZE
 import constants.colors as colors
 
@@ -18,7 +21,8 @@ def init_pygame(size, caption):
     return screen, font
 
 
-def draw_text(screen, text, font, color, x, y, center=False):
+def draw_text(screen: Surface, text: str, font: pygame.font,
+              color: tuple[int, int, int], x: int, y: int, center=False):
     surface = font.render(text, True, color)
     rect = surface.get_rect(center=(x, y)) if center else (x, y)
     screen.blit(surface, rect)

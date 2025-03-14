@@ -6,9 +6,10 @@ import numpy as np
 import pygame
 import random
 from gymnasium.spaces import MultiDiscrete, Box
-from constants.colors import WHITE
+from constants.colors import WHITE, GREEN, BLACK
 import envs as e
-from render.user_interface import show_input_window
+from render import BAR_WIDTH, FONT_SIZE
+from render.user_interface import show_input_window, draw_text
 from render.load_images import load_images
 
 
@@ -246,17 +247,25 @@ class FireEnv(gym.Env):
             return
         if not hasattr(self, 'screen'):
             pygame.init()
-            self.screen = pygame.display.set_mode((self.screen_size, self.screen_size))
+            self.screen = pygame.display.set_mode((self.screen_size + BAR_WIDTH, self.screen_size))
             pygame.display.set_caption("Fire Environment")
-        self.screen.fill(WHITE)
+        self.screen.fill(GREEN)
+
         cell = self.cell_size
         for fire in self.fires:
             self.screen.blit(self.images["fire"], (fire[0] * cell, fire[1] * cell))
         for obstacle in self.obstacles:
             self.screen.blit(self.images["obstacle"], (obstacle[0] * cell, obstacle[1] * cell))
         self.screen.blit(self.images["base"], (self.base[0] * cell, self.base[1] * cell))
-        for i in range(3):
+        for i in range(self.num_agents):
             self.screen.blit(self.images["agent"], (self.positions[i][0] * cell, self.positions[i][1] * cell))
+
+        font = pygame.font.Font(None, FONT_SIZE)
+        status_info = pygame.Rect(self.screen_size, 0, BAR_WIDTH,
+                                  self.screen_size)
+        pygame.draw.rect(self.screen, WHITE, status_info)
+        draw_text(self.screen, "Game info", font, BLACK, self.screen_size, 20)
+        draw_text(self.screen, f"Step {self.iteration_count}", font, BLACK, self.screen_size, 50)
         pygame.display.flip()
         pygame.time.delay(100)
 
