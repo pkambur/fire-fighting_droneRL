@@ -195,7 +195,6 @@ class FireEnv(gym.Env):
             y = np.clip(y, 0, self.grid_size - 1)
 
         new_pos = (x,y)
-        print(new_pos)
         penalty, collision = self._check_collisions(new_pos, agent_idx)
         if collision:
             reward += penalty
