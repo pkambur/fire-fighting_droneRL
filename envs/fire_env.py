@@ -137,20 +137,30 @@ class FireEnv(gym.Env):
         self.distances_to_obstacles = [abs(x - pos[0]) + abs(y - pos[1]) for pos
                                        in self.positions for x, y in self.obstacles]
 
-    def get_local_view(self, agent_idx: int) -> np.ndarray:
-        pos_x, pos_y = self.positions[agent_idx]
+    def get_local_view(self) -> np.array:
+        """
+        Возвращает локальное представление агента (5x5 клеток вокруг).
+        Returns:
+        np.array: сплющенный массив локального вида
+        """
+        pos_x, pos_y = self.position
         view_size = self.view // 2
         local_view = np.zeros((self.view, self.view), dtype=np.int32)
+
         for dx in range(-view_size, view_size + 1):
             for dy in range(-view_size, view_size + 1):
                 x, y = pos_x + dx, pos_y + dy
-                if 0 <= x < self.grid_size and 0 <= y < self.grid_size:
+                if not (0 <= x < self.grid_size and 0 <= y < self.grid_size):
+                    local_view[dx + view_size, dy + view_size] = 4  # вне поля
+                else:
                     if (x, y) in self.fires:
-                        local_view[dx + view_size, dy + view_size] = 1
+                        local_view[dx + view_size, dy + view_size] = 1  # Пожар
                     elif (x, y) in self.obstacles:
-                        local_view[dx + view_size, dy + view_size] = 2
+                        local_view[dx + view_size, dy + view_size] = 2  # Препятствие
                     elif (x, y) == self.base:
-                        local_view[dx + view_size, dy + view_size] = 3
+                        local_view[dx + view_size, dy + view_size] = 3  # База
+                    elif (x, y) in self.wind_cells:
+                        local_view[dx + view_size, dy + view_size] = 5  # База
         return local_view.flatten()
 
     def step(self, actions: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
