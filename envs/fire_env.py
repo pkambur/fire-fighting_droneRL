@@ -181,9 +181,8 @@ class FireEnv(gym.Env):
         return state, total_reward, terminated, truncated, {}
 
     def _take_action(self, agent_idx: int, action: int) -> float:
-        reward = 0
         self.battery_levels[agent_idx] -= 1
-        done = False
+        reward = 0
 
         dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
         x, y = self.positions[agent_idx]
@@ -194,14 +193,8 @@ class FireEnv(gym.Env):
         if self.wind_active:
             self.steps_with_wind += 1
             self.steps_from_last_wind = 0
-            if (x, y) in self.wind_cells:
-                x += self.wind_strength * self.wind_direction[0]
-                y += self.wind_strength * self.wind_direction[1]
-                # чтобы не вылетал за границы от ветра
-                x = np.clip(x, 0, self.grid_size - 1)
-                y = np.clip(y, 0, self.grid_size - 1)
-                reward += e.WIND_PENALTY
-                logger.info(f'wind penalty {e.WIND_PENALTY} in {x, y}')
+            reward, x, y = self._wind_influence(x, y)
+
         else:
             self.steps_with_wind = 0
             self.steps_from_last_wind += 1
@@ -224,6 +217,11 @@ class FireEnv(gym.Env):
         else:
             self.positions[agent_idx] = new_pos
             self.update_distances()
+            self.steps_without_progress[agent_idx] += 1
+
+        if self.steps_without_progress[agent_idx] >= e.STAGNATION_THRESHOLD:
+            reward += e.STAGNATION_PENALTY
+            logger.info(f'Stagnation penalty for agent {agent_idx}: {e.STAGNATION_PENALTY}')
 
         self._recharge(agent_idx)
         logger.info(f'Agent {agent_idx} Position = {self.positions[agent_idx]}')
@@ -256,6 +254,19 @@ class FireEnv(gym.Env):
             self.battery_levels[agent_idx] = e.MAX_BATTERY
             self.extinguisher_counts[agent_idx] = 1
             logger.info(f'Agent {agent_idx} recharged at base')
+
+    def _wind_influence(self, x: int, y: int) -> tuple[int, int, int]:
+        reward = 0
+        new_x, new_y = x, y
+        if (x, y) in self.wind_cells:
+            new_x = x + self.wind_strength * self.wind_direction[0]
+            new_y = y + self.wind_strength * self.wind_direction[1]
+            # чтобы не вылетал за границы от ветра
+            new_x = np.clip(new_x, 0, self.grid_size - 1)
+            new_y = np.clip(new_y, 0, self.grid_size - 1)
+            reward = e.WIND_PENALTY
+            logger.info(f'wind penalty {e.WIND_PENALTY} in {x, y} to {new_x, new_y}')
+        return reward, new_x, new_y
 
     def _check_collisions(self, new_pos: tuple, agent_idx: int) -> tuple[float, bool]:
         reward = 0
