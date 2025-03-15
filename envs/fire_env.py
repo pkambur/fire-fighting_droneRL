@@ -240,6 +240,10 @@ class FireEnv(gym.Env):
             else:
                 reward += e.FINAL_REWARD
                 logger.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
+            # привязать к батарее
+            step_saving_bonus = (self.max_steps - self.iteration_count) * 0.5
+            reward += step_saving_bonus
+            logger.info(f'Step saving bonus: +{step_saving_bonus}')
         elif self.iteration_count >= self.max_steps:
             reward -= e.FINAL_REWARD
             logger.info(f'MAX_STEPS DONE = {-e.FINAL_REWARD}')
