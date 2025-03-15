@@ -6,7 +6,7 @@ from stable_baselines3.common.callbacks import EvalCallback
 
 
 from envs.fire_env import FireEnv
-from utils.logging_files import tensorboard_log_dir, model_name, best_model_path
+from utils.logging_files import tensorboard_log_dir, model_name, best_model_path, program_logs
 
 
 def train_and_evaluate(fire_count, obstacle_count):

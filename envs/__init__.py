@@ -19,6 +19,7 @@ OBSTACLE_PENALTY = -100  #  штраф за препятствие
 OUT_OF_BOUNDS_PENALTY = -5  #  штраф за выход за границы
 BASE_PENALTY = 50
 CRASH_PENALTY = -100
+WIND_PENALTY = - 30
 
 NEAR_FIRE_BONUS = 10  #  бонус за приближение
 NO_EXTINGUISHER_PENALTY = -10  # штраф за неудачное тушение

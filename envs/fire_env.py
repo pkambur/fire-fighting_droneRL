@@ -1,10 +1,9 @@
-import logging
-from collections import deque
-
 import gymnasium as gym
 import numpy as np
 import pygame
 import random
+
+from collections import deque
 from gymnasium.spaces import MultiDiscrete, Box
 from constants.colors import WHITE, GREEN, BLACK
 import envs as e
@@ -12,6 +11,9 @@ from envs.fire_utils import calculate_wind_cells
 from render import BAR_WIDTH, FONT_SIZE
 from render.user_interface import show_input_window, draw_text
 from render.load_images import load_images
+from utils.logger import setup_logger
+
+logger = setup_logger()
 
 
 class FireEnv(gym.Env):
@@ -157,7 +159,7 @@ class FireEnv(gym.Env):
         terminated, truncated = False, False
 
         if self.iteration_count == 1:
-            logging.info("Episode started")
+            logger.info("Episode started")
 
         # Применяем действия ко всем агентам одновременно
         for i, action in enumerate(actions):
@@ -165,19 +167,19 @@ class FireEnv(gym.Env):
             total_reward += reward
 
         total_reward += e.STEP_PENALTY * self.num_agents
-        logging.info(f'STEP_PENALTY = {e.STEP_PENALTY * self.num_agents}')
+        logger.info(f'STEP_PENALTY = {e.STEP_PENALTY * self.num_agents}')
 
         if len(self.fires) == 0:
             terminated = True
             if self.iteration_count < self.max_steps // 2:
                 total_reward += e.FINAL_REWARD * 2
-                logging.info(f'FINAL_REWARD = {e.FINAL_REWARD * 2}')
+                logger.info(f'FINAL_REWARD = {e.FINAL_REWARD * 2}')
             else:
                 total_reward += e.FINAL_REWARD
-                logging.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
+                logger.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
         elif self.iteration_count >= self.max_steps:
             total_reward -= e.FINAL_REWARD
-            logging.info(f'MAX_STEPS DONE = {-e.FINAL_REWARD}')
+            logger.info(f'MAX_STEPS DONE = {-e.FINAL_REWARD}')
             truncated = True
 
         self.total_reward += total_reward
@@ -204,15 +206,19 @@ class FireEnv(gym.Env):
         if self.wind_active:
             self.steps_with_wind += 1
             self.steps_from_last_wind = 0
-
-            x += self.wind_strength * self.wind_direction[0]
-            y += self.wind_strength * self.wind_direction[1]
-            # чтобы не вылетал за границы от ветра
-            x = np.clip(x, 0, self.grid_size - 1)
-            y = np.clip(y, 0, self.grid_size - 1)
+            if (x, y) in self.wind_cells:
+                x += self.wind_strength * self.wind_direction[0]
+                y += self.wind_strength * self.wind_direction[1]
+                # чтобы не вылетал за границы от ветра
+                x = np.clip(x, 0, self.grid_size - 1)
+                y = np.clip(y, 0, self.grid_size - 1)
+                reward += e.WIND_PENALTY
+                logger.info(f'wind penalty {e.WIND_PENALTY} in {x, y}')
         else:
             self.steps_with_wind = 0
             self.steps_from_last_wind += 1
+            self.wind_cells = []
+
         new_pos = (x, y)
         penalty, collision = self._check_collisions(new_pos, agent_idx)
         if collision:
@@ -225,14 +231,14 @@ class FireEnv(gym.Env):
             reward = e.FIRE_REWARD
             self.positions[agent_idx] = new_pos
             self.update_distances()
-            logging.info(f'Agent {agent_idx} extinguished fire at {new_pos}: {e.FIRE_REWARD}')
+            logger.info(f'Agent {agent_idx} extinguished fire at {new_pos}: {e.FIRE_REWARD}')
 
         else:
             self.positions[agent_idx] = new_pos
             self.update_distances()
 
         self._recharge(agent_idx)
-        logging.info(f'Agent {agent_idx} Position = {self.positions[agent_idx]}')
+        logger.info(f'Agent {agent_idx} Position = {self.positions[agent_idx]}')
         return reward, done
 
     def _recharge(self, agent_idx: int):
@@ -240,22 +246,22 @@ class FireEnv(gym.Env):
             self.positions[agent_idx] = self.base
             self.battery_levels[agent_idx] = e.MAX_BATTERY
             self.extinguisher_counts[agent_idx] = 1
-            logging.info(f'Agent {agent_idx} recharged at base')
+            logger.info(f'Agent {agent_idx} recharged at base')
 
     def _check_collisions(self, new_pos: tuple, agent_idx: int) -> tuple[float, bool]:
         reward = 0
         collision = False
         if new_pos in [self.positions[i] for i in range(3) if i != agent_idx]:
             reward = e.CRASH_PENALTY
-            logging.info(f'Agent {agent_idx} collision with another agent: {e.CRASH_PENALTY}')
+            logger.info(f'Agent {agent_idx} collision with another agent: {e.CRASH_PENALTY}')
             collision = True
         elif not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
             reward = e.OUT_OF_BOUNDS_PENALTY
-            logging.info(f'Agent {agent_idx} out of bounds: {e.OUT_OF_BOUNDS_PENALTY}')
+            logger.info(f'Agent {agent_idx} out of bounds: {e.OUT_OF_BOUNDS_PENALTY}')
             collision = True
         elif new_pos in self.obstacles:
             reward = e.OBSTACLE_PENALTY
-            logging.info(f'Agent {agent_idx} hit obstacle: {e.OBSTACLE_PENALTY}')
+            logger.info(f'Agent {agent_idx} hit obstacle: {e.OBSTACLE_PENALTY}')
             collision = True
         if collision is True:
             self.steps_without_progress[agent_idx] += 1
@@ -290,7 +296,7 @@ class FireEnv(gym.Env):
                                                self.wind_direction,
                                                self.wind_strength,
                                                self.grid_size)
-        logging.info(f"wind {self.wind_cells}")
+        logger.info(f"wind {self.wind_cells}")
 
     def render(self) -> None:
         if self.render_mode != "human":

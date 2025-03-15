@@ -1,13 +1,14 @@
 import csv
-import logging
 import os
 
 from envs.fire_env import FireEnv
 from models import test_episodes
 from render.user_interface import quit_pygame
 from utils.logging_files import log_csv
+from utils.logger import setup_logger
 
 summary_shown = False
+logger = setup_logger()
 
 
 def test_model(model, fire_count, obstacle_count):
@@ -23,7 +24,7 @@ def test_model(model, fire_count, obstacle_count):
 
     test_env = FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode="human")
 
-    logging.info("Starting model testing...")
+    logger.info("Starting model testing...")
     for episode in range(1, test_episodes + 1):
         obs, _ = test_env.reset()
         total_reward = 0
@@ -36,7 +37,7 @@ def test_model(model, fire_count, obstacle_count):
                 writer.writerow([episode, test_env.iteration_count] +
                                 test_env.battery_levels + test_env.extinguisher_counts +
                                 [len(test_env.fires), reward] + list(actions))
-            logging.info(f"Episode = {episode}, Step {test_env.iteration_count + 1}: "
+            logger.info(f"Episode = {episode}, Step {test_env.iteration_count + 1}: "
                          f"Reward = {reward}, Total Reward = {total_reward}, "
                          f"Fires Left: {len(test_env.fires)}")
             test_env.render()
