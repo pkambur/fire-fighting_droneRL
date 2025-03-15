@@ -4,11 +4,7 @@ from logging.handlers import RotatingFileHandler
 from utils.logging_files import program_logs
 
 
-# logger = logging.basicConfig(filename=program_logs, level=logging.INFO,
-#                              format='%(asctime)s, %(message)s', filemode='w')
-
-
-def setup_logger(logger_name='logger', log_file=program_logs, level=logging.INFO,
+def setup_logger(logger_name='global_logger', log_file=program_logs, level=logging.INFO,
                  max_bytes=10 * 1024 * 1024, file_mode='w'):
     """
     :param file_mode:
@@ -19,8 +15,9 @@ def setup_logger(logger_name='logger', log_file=program_logs, level=logging.INFO
     :return:
     """
     logger = logging.getLogger(logger_name)
+
     if logger.hasHandlers():
-        return logger
+        logger.handlers.clear()
 
     logger.setLevel(level)
     formatter = logging.Formatter('%(asctime)s - %(message)s')
