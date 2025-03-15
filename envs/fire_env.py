@@ -27,12 +27,11 @@ class FireEnv(gym.Env):
         self.base = e.BASE_POSITION
         self.positions = [self.base, (1, 9), (2, 9)]  # Начальные позиции 3 агентов
         self.num_agents = 3
-        self.battery_levels = [e.MAX_BATTERY] * self.num_agents
         self.render_mode = render_mode
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
         self.total_reward = 0
-        self.max_steps = 1000
+        self.max_steps = e.MAX_BATTERY
         self.view = e.AGENT_VIEW
         self.distances_to_fires = None
         self.distances_to_obstacles = None
@@ -58,7 +57,6 @@ class FireEnv(gym.Env):
         # Пространство наблюдений для observer
         local_view_size = self.view ** 2
         low = np.array(
-            [0] * self.num_agents +
             [0] +
             [0] * self.num_agents * 2 +
             [-self.grid_size, -self.grid_size] * self.num_agents +
@@ -68,7 +66,6 @@ class FireEnv(gym.Env):
         )
 
         high = np.array(
-            [e.MAX_BATTERY] * self.num_agents +  # батарея
             [self.fire_count] +  # кол-во очагов
             [self.grid_size] * self.num_agents * 2 +  # agent positions
             [self.grid_size, self.grid_size] * self.num_agents +  # расстояние до базы
@@ -83,7 +80,6 @@ class FireEnv(gym.Env):
         if seed is not None:
             np.random.seed(seed)
         self.positions = [self.base, (1, 9), (2, 9)]
-        self.battery_levels = [e.MAX_BATTERY] * self.num_agents
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
         self.total_reward = 0
@@ -137,13 +133,13 @@ class FireEnv(gym.Env):
         self.distances_to_obstacles = [abs(x - pos[0]) + abs(y - pos[1]) for pos
                                        in self.positions for x, y in self.obstacles]
 
-    def get_local_view(self) -> np.array:
+    def get_local_view(self, agent_idx: int) -> np.ndarray:
         """
         Возвращает локальное представление агента (5x5 клеток вокруг).
         Returns:
         np.array: сплющенный массив локального вида
         """
-        pos_x, pos_y = self.position
+        pos_x, pos_y = self.positions[agent_idx]
         view_size = self.view // 2
         local_view = np.zeros((self.view, self.view), dtype=np.int32)
 
@@ -191,7 +187,6 @@ class FireEnv(gym.Env):
         return state, total_reward, terminated, truncated, {}
 
     def _take_action(self, agent_idx: int, action: int) -> float:
-        self.battery_levels[agent_idx] -= 1
         reward = 0
 
         dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
@@ -292,7 +287,6 @@ class FireEnv(gym.Env):
                           for i in range(self.num_agents)]
 
         state_parts = [
-            np.array(self.battery_levels, dtype=np.float32),
             np.array([len(self.fires)], dtype=np.float32),
             (np.concatenate(self.positions))
         ]

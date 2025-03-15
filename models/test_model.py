@@ -18,7 +18,7 @@ def test_model(model, fire_count, obstacle_count):
         os.remove(log_csv)
     with open(log_csv, mode='w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(["Episode", "Step", "Battery1", "Battery2", "Battery3",
+        writer.writerow(["Episode", "Step",
                          "Fires Left", "Reward", "Action1", "Action2", "Action3"])
 
     test_env = FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode="human")
@@ -34,11 +34,10 @@ def test_model(model, fire_count, obstacle_count):
             with open(log_csv, mode='a', newline='') as file:
                 writer = csv.writer(file)
                 writer.writerow([episode, test_env.iteration_count] +
-                                test_env.battery_levels +
                                 [len(test_env.fires), reward] + list(actions))
             logger.info(f"Episode = {episode}, Step {test_env.iteration_count + 1}: "
-                         f"Reward = {reward}, Total Reward = {total_reward}, "
-                         f"Fires Left: {len(test_env.fires)}")
+                        f"Reward = {reward}, Total Reward = {total_reward}, "
+                        f"Fires Left: {len(test_env.fires)}")
             test_env.render()
             if terminated or truncated:
                 if len(test_env.fires) == 0:
