@@ -19,7 +19,6 @@ def test_model(model, fire_count, obstacle_count):
     with open(log_csv, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["Episode", "Step", "Battery1", "Battery2", "Battery3",
-                         "Extinguishers1", "Extinguishers2", "Extinguishers3",
                          "Fires Left", "Reward", "Action1", "Action2", "Action3"])
 
     test_env = FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode="human")
@@ -35,7 +34,7 @@ def test_model(model, fire_count, obstacle_count):
             with open(log_csv, mode='a', newline='') as file:
                 writer = csv.writer(file)
                 writer.writerow([episode, test_env.iteration_count] +
-                                test_env.battery_levels + test_env.extinguisher_counts +
+                                test_env.battery_levels +
                                 [len(test_env.fires), reward] + list(actions))
             logger.info(f"Episode = {episode}, Step {test_env.iteration_count + 1}: "
                          f"Reward = {reward}, Total Reward = {total_reward}, "

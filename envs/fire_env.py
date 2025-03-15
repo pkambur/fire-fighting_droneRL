@@ -28,7 +28,6 @@ class FireEnv(gym.Env):
         self.positions = [self.base, (1, 9), (2, 9)]  # Начальные позиции 3 агентов
         self.num_agents = 3
         self.battery_levels = [e.MAX_BATTERY] * self.num_agents
-        self.extinguisher_counts = [1] * self.num_agents
         self.render_mode = render_mode
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
@@ -60,7 +59,6 @@ class FireEnv(gym.Env):
         local_view_size = self.view ** 2
         low = np.array(
             [0] * self.num_agents +
-            [0] * self.num_agents +
             [0] +
             [0] * self.num_agents * 2 +
             [-self.grid_size, -self.grid_size] * self.num_agents +
@@ -71,9 +69,8 @@ class FireEnv(gym.Env):
 
         high = np.array(
             [e.MAX_BATTERY] * self.num_agents +  # батарея
-            [1] * self.num_agents +  # огнетушитель
             [self.fire_count] +  # кол-во очагов
-            [self.grid_size] * self.num_agents * 2 + # agent positions
+            [self.grid_size] * self.num_agents * 2 +  # agent positions
             [self.grid_size, self.grid_size] * self.num_agents +  # расстояние до базы
             [2 * self.grid_size] * self.fire_count +  # расстояние до очагов
             [2 * self.grid_size] * self.obstacle_count * self.num_agents +  # расстояния до препятствий
@@ -87,7 +84,6 @@ class FireEnv(gym.Env):
             np.random.seed(seed)
         self.positions = [self.base, (1, 9), (2, 9)]
         self.battery_levels = [e.MAX_BATTERY] * self.num_agents
-        self.extinguisher_counts = [1] * self.num_agents
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
         self.total_reward = 0
@@ -96,7 +92,7 @@ class FireEnv(gym.Env):
         self.wind_active = False
         self.wind_strength = 0
         self.wind_direction = []
-        self.wind_duration = random.randint(2, 6)
+        self.wind_duration = random.randint(5, 15)
         self.steps_with_wind = 0
         self.steps_from_last_wind = 0
         return self._get_state(), {}
@@ -189,45 +185,40 @@ class FireEnv(gym.Env):
         reward = 0
 
         dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
-        x, y = self.positions[agent_idx]
-        x += dx
-        y += dy
-        # new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
+        new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
 
         if self.wind_active:
             self.steps_with_wind += 1
             self.steps_from_last_wind = 0
-            reward, x, y = self._wind_influence(x, y)
-
         else:
             self.steps_with_wind = 0
             self.steps_from_last_wind += 1
             self.wind_cells = []
 
-        new_pos = (x, y)
-        penalty, collision = self._check_collisions(new_pos, agent_idx)
-        if collision:
-            reward += penalty
-
-        elif new_pos in self.fires:
-            self.fires.remove(new_pos)
-            self.extinguisher_counts[agent_idx] -= 1
-            self.steps_without_progress[agent_idx] = 0
-            reward = e.FIRE_REWARD
+        if new_pos in self.wind_cells:
+            reward, new_pos = self._wind_influence(new_pos)
             self.positions[agent_idx] = new_pos
-            self.update_distances()
-            logger.info(f'Agent {agent_idx} extinguished fire at {new_pos}: {e.FIRE_REWARD}')
-
-        else:
-            self.positions[agent_idx] = new_pos
-            self.update_distances()
             self.steps_without_progress[agent_idx] += 1
+        else:
+            penalty, collision = self._check_collisions(new_pos, agent_idx)
+            if collision:
+                reward += penalty
+            elif new_pos in self.fires:
+                self.fires.remove(new_pos)
+                self.steps_without_progress[agent_idx] = 0
+                reward = e.FIRE_REWARD
+                self.positions[agent_idx] = new_pos
+                logger.info(f'Agent {agent_idx} extinguished fire at {new_pos}: {e.FIRE_REWARD}')
+            else:
+                self.positions[agent_idx] = new_pos
+                self.steps_without_progress[agent_idx] += 1
+
+        self.update_distances()
 
         if self.steps_without_progress[agent_idx] >= e.STAGNATION_THRESHOLD:
             reward += e.STAGNATION_PENALTY
             logger.info(f'Stagnation penalty for agent {agent_idx}: {e.STAGNATION_PENALTY}')
 
-        self._recharge(agent_idx)
         logger.info(f'Agent {agent_idx} Position = {self.positions[agent_idx]}')
         return reward
 
@@ -252,16 +243,11 @@ class FireEnv(gym.Env):
             truncated = True
         return reward, terminated, truncated
 
-    def _recharge(self, agent_idx: int):
-        if self.battery_levels[agent_idx] < e.MIN_BATTERY or self.extinguisher_counts[agent_idx] == 0:
-            self.positions[agent_idx] = self.base
-            self.battery_levels[agent_idx] = e.MAX_BATTERY
-            self.extinguisher_counts[agent_idx] = 1
-            logger.info(f'Agent {agent_idx} recharged at base')
-
-    def _wind_influence(self, x: int, y: int) -> tuple[int, int, int]:
+    def _wind_influence(self, pos: tuple[int, int]) -> tuple[int, tuple[int, int]]:
         reward = 0
-        new_x, new_y = x, y
+        # разделены новые и старые, чтобы проверить в логах работу
+        x, y = pos
+        new_x, new_y = pos
         if (x, y) in self.wind_cells:
             new_x = x + self.wind_strength * self.wind_direction[0]
             new_y = y + self.wind_strength * self.wind_direction[1]
@@ -270,7 +256,7 @@ class FireEnv(gym.Env):
             new_y = np.clip(new_y, 0, self.grid_size - 1)
             reward = e.WIND_PENALTY
             logger.info(f'wind penalty {e.WIND_PENALTY} in {x, y} to {new_x, new_y}')
-        return reward, new_x, new_y
+        return reward, (new_x, new_y)
 
     def _check_collisions(self, new_pos: tuple, agent_idx: int) -> tuple[float, bool]:
         reward = 0
@@ -296,7 +282,7 @@ class FireEnv(gym.Env):
                           for i in range(self.num_agents)]
 
         state_parts = [
-            np.array(self.battery_levels + self.extinguisher_counts, dtype=np.float32),
+            np.array(self.battery_levels, dtype=np.float32),
             np.array([len(self.fires)], dtype=np.float32),
             (np.concatenate(self.positions))
         ]
