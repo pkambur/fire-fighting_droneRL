@@ -59,7 +59,10 @@ class FireEnv(gym.Env):
         # Пространство наблюдений для observer
         local_view_size = self.view ** 2
         low = np.array(
-            [0] * self.num_agents + [0] * self.num_agents + [0] +
+            [0] * self.num_agents +
+            [0] * self.num_agents +
+            [0] +
+            [0] * self.num_agents * 2 +
             [-self.grid_size, -self.grid_size] * self.num_agents +
             [0] * self.fire_count + [0] * self.obstacle_count * self.num_agents +
             [0] * (local_view_size * self.num_agents),
@@ -70,6 +73,7 @@ class FireEnv(gym.Env):
             [e.MAX_BATTERY] * self.num_agents +  # батарея
             [1] * self.num_agents +  # огнетушитель
             [self.fire_count] +  # кол-во очагов
+            [self.grid_size] * self.num_agents * 2 + # agent positions
             [self.grid_size, self.grid_size] * self.num_agents +  # расстояние до базы
             [2 * self.grid_size] * self.fire_count +  # расстояние до очагов
             [2 * self.grid_size] * self.obstacle_count * self.num_agents +  # расстояния до препятствий
@@ -294,6 +298,7 @@ class FireEnv(gym.Env):
         state_parts = [
             np.array(self.battery_levels + self.extinguisher_counts, dtype=np.float32),
             np.array([len(self.fires)], dtype=np.float32),
+            (np.concatenate(self.positions))
         ]
         distances_to_fires = (self.distances_to_fires +
                               [0] * (self.fire_count - len(self.distances_to_fires)))
