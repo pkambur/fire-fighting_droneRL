@@ -8,6 +8,7 @@ import random
 from gymnasium.spaces import MultiDiscrete, Box
 from constants.colors import WHITE, GREEN, BLACK
 import envs as e
+from envs.fire_utils import calculate_wind_cells
 from render import BAR_WIDTH, FONT_SIZE
 from render.user_interface import show_input_window, draw_text
 from render.load_images import load_images
@@ -36,9 +37,12 @@ class FireEnv(gym.Env):
         self.distances_to_obstacles = None
 
         self.wind_active = False
-        self.wind_direction = None
+        self.wind_cells = None
         self.wind_strength = None
+        self.wind_direction = None
+        self.wind_duration = None
         self.steps_from_last_wind = None
+        self.steps_with_wind = None
 
         if fire_count is None or obstacle_count is None:
             fire_count, obstacle_count = show_input_window()
@@ -61,11 +65,13 @@ class FireEnv(gym.Env):
         )
 
         high = np.array(
-            [e.MAX_BATTERY] * self.num_agents + [1] * self.num_agents +
-            [self.fire_count] + [self.grid_size, self.grid_size] * self.num_agents +
-            [2 * self.grid_size] * self.fire_count +
-            [2 * self.grid_size] * self.obstacle_count * self.num_agents +
-            [3] * (local_view_size * self.num_agents),
+            [e.MAX_BATTERY] * self.num_agents +  # батарея
+            [1] * self.num_agents +  # огнетушитель
+            [self.fire_count] +  # кол-во очагов
+            [self.grid_size, self.grid_size] * self.num_agents +  # расстояние до базы
+            [2 * self.grid_size] * self.fire_count +  # расстояние до очагов
+            [2 * self.grid_size] * self.obstacle_count * self.num_agents +  # расстояния до препятствий
+            [3] * (local_view_size * self.num_agents),  # что видят агенты
             dtype=np.float32
         )
         self.observation_space = Box(low=low, high=high, dtype=np.float32)
@@ -82,8 +88,10 @@ class FireEnv(gym.Env):
         self.fires, self.obstacles = self.generate_positions(self.fire_count, self.obstacle_count)
         self.update_distances()
         self.wind_active = False
-        self.wind_direction = None
         self.wind_strength = 0
+        self.wind_direction = []
+        self.wind_duration = random.randint(2, 6)
+        self.steps_with_wind = 0
         self.steps_from_last_wind = 0
         return self._get_state(), {}
 
@@ -174,6 +182,12 @@ class FireEnv(gym.Env):
 
         self.total_reward += total_reward
         state = self._get_state()
+
+        if self.steps_from_last_wind >= random.randint(10, 30):
+            self._wind_activation()
+        if self.steps_with_wind == self.wind_duration:
+            self.wind_active = False
+
         return state, total_reward, terminated, truncated, {}
 
     def _take_action(self, agent_idx: int, action: int) -> tuple[float, bool]:
@@ -188,13 +202,18 @@ class FireEnv(gym.Env):
         # new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
 
         if self.wind_active:
+            self.steps_with_wind += 1
+            self.steps_from_last_wind = 0
+
             x += self.wind_strength * self.wind_direction[0]
             y += self.wind_strength * self.wind_direction[1]
             # чтобы не вылетал за границы от ветра
             x = np.clip(x, 0, self.grid_size - 1)
             y = np.clip(y, 0, self.grid_size - 1)
-
-        new_pos = (x,y)
+        else:
+            self.steps_with_wind = 0
+            self.steps_from_last_wind += 1
+        new_pos = (x, y)
         penalty, collision = self._check_collisions(new_pos, agent_idx)
         if collision:
             reward += penalty
@@ -262,6 +281,17 @@ class FireEnv(gym.Env):
 
         return state
 
+    def _wind_activation(self):
+        self.wind_active = True
+        wind_start_cell = random.choices(list(range(self.grid_size)), k=2)
+        self.wind_direction = random.choices([-1, 0, 1], k=2)
+        self.wind_strength = random.randint(1, 3)
+        self.wind_cells = calculate_wind_cells(wind_start_cell,
+                                               self.wind_direction,
+                                               self.wind_strength,
+                                               self.grid_size)
+        logging.info(f"wind {self.wind_cells}")
+
     def render(self) -> None:
         if self.render_mode != "human":
             return
@@ -279,6 +309,10 @@ class FireEnv(gym.Env):
         self.screen.blit(self.images["base"], (self.base[0] * cell, self.base[1] * cell))
         for i in range(self.num_agents):
             self.screen.blit(self.images["agent"], (self.positions[i][0] * cell, self.positions[i][1] * cell))
+
+        if self.wind_cells is not None:
+            for wind in self.wind_cells:
+                self.screen.blit(self.images["wind"], (wind[0] * cell, wind[1] * cell))
 
         font = pygame.font.Font(None, FONT_SIZE)
         status_info = pygame.Rect(self.screen_size, 0, BAR_WIDTH,
