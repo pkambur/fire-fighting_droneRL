@@ -156,31 +156,17 @@ class FireEnv(gym.Env):
     def step(self, actions: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
         self.iteration_count += 1
         total_reward = 0
-        terminated, truncated = False, False
 
         if self.iteration_count == 1:
             logger.info("Episode started")
 
         # Применяем действия ко всем агентам одновременно
         for i, action in enumerate(actions):
-            reward, _ = self._take_action(i, action)
+            reward = self._take_action(i, action)
             total_reward += reward
 
         total_reward += e.STEP_PENALTY * self.num_agents
         logger.info(f'STEP_PENALTY = {e.STEP_PENALTY * self.num_agents}')
-
-        if len(self.fires) == 0:
-            terminated = True
-            if self.iteration_count < self.max_steps // 2:
-                total_reward += e.FINAL_REWARD * 2
-                logger.info(f'FINAL_REWARD = {e.FINAL_REWARD * 2}')
-            else:
-                total_reward += e.FINAL_REWARD
-                logger.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
-        elif self.iteration_count >= self.max_steps:
-            total_reward -= e.FINAL_REWARD
-            logger.info(f'MAX_STEPS DONE = {-e.FINAL_REWARD}')
-            truncated = True
 
         self.total_reward += total_reward
         state = self._get_state()
@@ -190,9 +176,11 @@ class FireEnv(gym.Env):
         if self.steps_with_wind == self.wind_duration:
             self.wind_active = False
 
+        reward, terminated, truncated = self._check_termination()
+        total_reward += reward
         return state, total_reward, terminated, truncated, {}
 
-    def _take_action(self, agent_idx: int, action: int) -> tuple[float, bool]:
+    def _take_action(self, agent_idx: int, action: int) -> float:
         reward = 0
         self.battery_levels[agent_idx] -= 1
         done = False
@@ -239,7 +227,24 @@ class FireEnv(gym.Env):
 
         self._recharge(agent_idx)
         logger.info(f'Agent {agent_idx} Position = {self.positions[agent_idx]}')
-        return reward, done
+        return reward
+
+    def _check_termination(self):
+        reward = 0
+        terminated, truncated = False, False
+        if len(self.fires) == 0:
+            terminated = True
+            if self.iteration_count < self.max_steps // 2:
+                reward += e.FINAL_REWARD * 2
+                logger.info(f'FINAL_REWARD = {e.FINAL_REWARD * 2}')
+            else:
+                reward += e.FINAL_REWARD
+                logger.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
+        elif self.iteration_count >= self.max_steps:
+            reward -= e.FINAL_REWARD
+            logger.info(f'MAX_STEPS DONE = {-e.FINAL_REWARD}')
+            truncated = True
+        return reward, terminated, truncated
 
     def _recharge(self, agent_idx: int):
         if self.battery_levels[agent_idx] < e.MIN_BATTERY or self.extinguisher_counts[agent_idx] == 0:
