@@ -37,7 +37,7 @@ class FireEnv(gym.Env):
         self.distances_to_obstacles = None
 
         self.wind_active = False
-        self.wind_cells = None
+        self.wind_cells = []
         self.wind_strength = None
         self.wind_direction = None
         self.wind_duration = None
@@ -146,7 +146,7 @@ class FireEnv(gym.Env):
         for dx in range(-view_size, view_size + 1):
             for dy in range(-view_size, view_size + 1):
                 x, y = pos_x + dx, pos_y + dy
-                if not (0 <= x < self.grid_size and 0 <= y < self.grid_size):
+                if not self.is_valid(x, y):#0 <= x < self.grid_size and 0 <= y < self.grid_size):
                     local_view[dx + view_size, dy + view_size] = 4  # вне поля
                 else:
                     if (x, y) in self.fires:
@@ -179,7 +179,7 @@ class FireEnv(gym.Env):
 
         if self.steps_from_last_wind >= random.randint(10, 30):
             self._wind_activation()
-        if self.steps_with_wind == self.wind_duration:
+        elif self.steps_with_wind == self.wind_duration:
             self.wind_active = False
 
         reward, terminated, truncated = self._check_termination()
@@ -304,6 +304,11 @@ class FireEnv(gym.Env):
 
     def _wind_activation(self):
         self.wind_active = True
+        if self.iteration_count == 1:
+            wind_start_cell = self.base
+            while wind_start_cell not in self.positions:
+                wind_start_cell = random.choices(list(range(self.grid_size)), k=2)
+
         wind_start_cell = random.choices(list(range(self.grid_size)), k=2)
         self.wind_direction = random.choices([-1, 0, 1], k=2)
         self.wind_strength = random.randint(1, 3)

@@ -28,9 +28,4 @@ def setup_logger(logger_name='logger', log_file=program_logs, level=logging.INFO
     file_handler = RotatingFileHandler(log_file, maxBytes=max_bytes, mode=file_mode)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
-
-    # console_handler = logging.StreamHandler()
-    # console_handler.setFormatter(formatter)
-    # logger.addHandler(console_handler)
-
     return logger
