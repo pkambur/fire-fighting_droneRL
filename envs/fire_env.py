@@ -83,16 +83,16 @@ class FireEnv(gym.Env):
         self.positions = [self.base, (1, 9), (2, 9)]
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
-        # self.total_reward = 0
-        # self.reward = 0
         self.fires, self.obstacles = self.generate_positions(self.fire_count, self.obstacle_count)
         self.update_distances()
+        self.total_reward = 0
         self.wind_active = False
         self.wind_strength = 0
         self.wind_direction = []
         self.wind_duration = random.randint(5, 15)
         self.steps_with_wind = 0
         self.steps_from_last_wind = 0
+        logger.info("Episode started")
         return self._get_state(), {}
 
     def generate_positions(self, fire_count: int, obstacle_count: int) -> tuple[set, set]:
@@ -163,10 +163,8 @@ class FireEnv(gym.Env):
 
     def step(self, actions: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
         self.iteration_count += 1
+        logger.info(f'Step {self.iteration_count}')
         self.reward = 0
-
-        if self.iteration_count == 1:
-            logger.info("Episode started")
 
         # Применяем действия ко всем агентам одновременно
         for i, action in enumerate(actions):
