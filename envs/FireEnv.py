@@ -169,6 +169,12 @@ class FireEnv(gym.Env):
         return state, self.reward, terminated, truncated, {}
 
     def _take_action(self, agent_idx: int, action: int):
+        old_distance = min(abs(self.positions[agent_idx][0] - f[0]) + abs(self.positions[agent_idx][1] - f[1])
+                           for f in self.fires)  # if self.fires  else float('inf')
+
+        print(f'agent {agent_idx}')
+        print(f'old {old_distance}')
+        print(self.distances_to_fires)
         dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
         new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
 
@@ -199,6 +205,12 @@ class FireEnv(gym.Env):
                 self.steps_without_progress[agent_idx] += 1
             self.positions[agent_idx] = new_pos
         self.update_fire_distances()
+
+        # new_distance = min(
+        #     abs(new_pos[0] - f[0]) + abs(new_pos[1] - f[1]) for f in self.fires) if self.fires else float('inf')
+        # if new_distance < old_distance:
+        #     reward += e.NEAR_FIRE_BONUS
+        #     logging.info(f'Agent {agent_idx} moved closer to fire: +{e.NEAR_FIRE_BONUS}')
 
         if self.steps_without_progress[agent_idx] >= e.STAGNATION_THRESHOLD:
             self.reward += e.STAGNATION_PENALTY
