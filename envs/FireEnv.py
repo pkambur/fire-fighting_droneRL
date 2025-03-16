@@ -35,7 +35,6 @@ class FireEnv(gym.Env):
         self.max_steps = e.MAX_BATTERY
         self.view = e.AGENT_VIEW
         self.distances_to_fires = None
-        self.distances_to_obstacles = None
         self.wind = Wind(self)
 
         if fire_count is None or obstacle_count is None:
@@ -53,8 +52,7 @@ class FireEnv(gym.Env):
         low = np.array(
             [0] +
             [0] * self.num_agents * 2 +
-            [-self.grid_size, -self.grid_size] * self.num_agents +
-            [0] * self.fire_count + [0] * self.obstacle_count * self.num_agents +
+            [0] * self.fire_count +
             [0] * (local_view_size * self.num_agents),
             dtype=np.float32
         )
@@ -62,9 +60,7 @@ class FireEnv(gym.Env):
         high = np.array(
             [self.fire_count] +  # кол-во очагов
             [self.grid_size] * self.num_agents * 2 +  # agent positions
-            [self.grid_size, self.grid_size] * self.num_agents +  # расстояние до базы
             [2 * self.grid_size] * self.fire_count +  # расстояние до очагов
-            [2 * self.grid_size] * self.obstacle_count * self.num_agents +  # расстояния до препятствий
             [3] * (local_view_size * self.num_agents),  # что видят агенты
             dtype=np.float32
         )
@@ -77,7 +73,7 @@ class FireEnv(gym.Env):
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
         self.fires, self.obstacles = self.generate_positions(self.fire_count, self.obstacle_count)
-        self.update_distances()
+        self.update_fire_distances()
         self.total_reward = 0
         self.wind.reset()
         logger.info("Episode started")
@@ -116,12 +112,10 @@ class FireEnv(gym.Env):
     def is_valid(self, x, y):
         return 0 <= x < self.grid_size and 0 <= y < self.grid_size
 
-    def update_distances(self) -> None:
+    def update_fire_distances(self) -> None:
         self.distances_to_fires = sorted(
             [min(abs(x - pos[0]) + abs(y - pos[1]) for pos in self.positions) for x, y in self.fires]
         ) if self.fires else []
-        self.distances_to_obstacles = [abs(x - pos[0]) + abs(y - pos[1]) for pos
-                                       in self.positions for x, y in self.obstacles]
 
     def get_local_view(self, agent_idx: int) -> np.ndarray:
         """
@@ -191,26 +185,23 @@ class FireEnv(gym.Env):
             self.positions[agent_idx] = new_pos
             self.steps_without_progress[agent_idx] += 1
         else:
-            penalty, collision = self._check_collisions(new_pos, agent_idx)
-            if collision:
-                self.reward += penalty
+            if self._check_collisions(new_pos, agent_idx):
+                self.steps_without_progress[agent_idx] += 1
             elif new_pos in self.fires:
                 self.fires.remove(new_pos)
                 self.steps_without_progress[agent_idx] = 0
                 self.reward += e.FIRE_REWARD
-                self.positions[agent_idx] = new_pos
                 logger.info(f'Agent {agent_idx} extinguished fire at {new_pos}: {e.FIRE_REWARD}')
             else:
-                self.positions[agent_idx] = new_pos
                 self.steps_without_progress[agent_idx] += 1
-
-        self.update_distances()
+            self.positions[agent_idx] = new_pos
+        self.update_fire_distances()
 
         if self.steps_without_progress[agent_idx] >= e.STAGNATION_THRESHOLD:
             self.reward += e.STAGNATION_PENALTY
             logger.info(f'Stagnation penalty for agent {agent_idx}: {e.STAGNATION_PENALTY}')
 
-        logger.info(f'Agent {agent_idx} Position = {self.positions[agent_idx]}')
+        logger.info(f'Agent {agent_idx} Position = {self.positions[agent_idx]} reward {self.reward}')
 
     def _check_termination(self):
         terminated, truncated = False, False
@@ -246,29 +237,23 @@ class FireEnv(gym.Env):
             logger.info(f'wind penalty {e.WIND_PENALTY} in {x, y} to {new_x, new_y}')
         return new_x, new_y
 
-    def _check_collisions(self, new_pos: tuple, agent_idx: int) -> tuple[float, bool]:
-        reward = 0
+    def _check_collisions(self, new_pos: tuple, agent_idx: int) -> bool:
         collision = False
-        if new_pos in [self.positions[i] for i in range(3) if i != agent_idx]:
-            reward = e.CRASH_PENALTY
+        if new_pos in [self.positions[i] for i in range(self.num_agents) if i != agent_idx]:
+            self.reward += e.CRASH_PENALTY
             logger.info(f'Agent {agent_idx} collision with another agent: {e.CRASH_PENALTY}')
             collision = True
         elif not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
-            reward = e.OUT_OF_BOUNDS_PENALTY
+            self.reward += e.OUT_OF_BOUNDS_PENALTY
             logger.info(f'Agent {agent_idx} out of bounds: {e.OUT_OF_BOUNDS_PENALTY}')
             collision = True
         elif new_pos in self.obstacles:
-            reward = e.OBSTACLE_PENALTY
+            self.reward += e.OBSTACLE_PENALTY
             logger.info(f'Agent {agent_idx} hit obstacle: {e.OBSTACLE_PENALTY}')
             collision = True
-        if collision is True:
-            self.steps_without_progress[agent_idx] += 1
-        return reward, collision
+        return collision
 
     def _get_state(self) -> np.ndarray:
-        base_distances = [[self.positions[i][0] - self.base[0], self.positions[i][1] - self.base[1]]
-                          for i in range(self.num_agents)]
-
         state_parts = [
             np.array([len(self.fires)], dtype=np.float32),
             (np.concatenate(self.positions))
@@ -278,9 +263,7 @@ class FireEnv(gym.Env):
 
         state = np.concatenate(
             state_parts +
-            base_distances +
             [distances_to_fires] +
-            [self.distances_to_obstacles] +
             [self.get_local_view(i) for i in range(self.num_agents)])
 
         return state
