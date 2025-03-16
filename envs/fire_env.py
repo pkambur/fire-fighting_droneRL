@@ -31,6 +31,7 @@ class FireEnv(gym.Env):
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
         self.total_reward = 0
+        self.reward = 0
         self.max_steps = e.MAX_BATTERY
         self.view = e.AGENT_VIEW
         self.distances_to_fires = None
@@ -82,7 +83,8 @@ class FireEnv(gym.Env):
         self.positions = [self.base, (1, 9), (2, 9)]
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
-        self.total_reward = 0
+        # self.total_reward = 0
+        # self.reward = 0
         self.fires, self.obstacles = self.generate_positions(self.fire_count, self.obstacle_count)
         self.update_distances()
         self.wind_active = False
@@ -146,7 +148,7 @@ class FireEnv(gym.Env):
         for dx in range(-view_size, view_size + 1):
             for dy in range(-view_size, view_size + 1):
                 x, y = pos_x + dx, pos_y + dy
-                if not self.is_valid(x, y):#0 <= x < self.grid_size and 0 <= y < self.grid_size):
+                if not self.is_valid(x, y):  # 0 <= x < self.grid_size and 0 <= y < self.grid_size):
                     local_view[dx + view_size, dy + view_size] = 4  # вне поля
                 else:
                     if (x, y) in self.fires:
@@ -161,20 +163,18 @@ class FireEnv(gym.Env):
 
     def step(self, actions: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
         self.iteration_count += 1
-        total_reward = 0
+        self.reward = 0
 
         if self.iteration_count == 1:
             logger.info("Episode started")
 
         # Применяем действия ко всем агентам одновременно
         for i, action in enumerate(actions):
-            reward = self._take_action(i, action)
-            total_reward += reward
+            self._take_action(i, action)
 
-        total_reward += e.STEP_PENALTY * self.num_agents
+        self.reward += e.STEP_PENALTY * self.num_agents
         logger.info(f'STEP_PENALTY = {e.STEP_PENALTY * self.num_agents}')
 
-        self.total_reward += total_reward
         state = self._get_state()
 
         if self.steps_from_last_wind >= random.randint(10, 30):
@@ -182,13 +182,12 @@ class FireEnv(gym.Env):
         elif self.steps_with_wind == self.wind_duration:
             self.wind_active = False
 
-        reward, terminated, truncated = self._check_termination()
-        total_reward += reward
-        return state, total_reward, terminated, truncated, {}
+        terminated, truncated = self._check_termination()
+        self.total_reward += self.reward
 
-    def _take_action(self, agent_idx: int, action: int) -> float:
-        reward = 0
+        return state, self.reward, terminated, truncated, {}
 
+    def _take_action(self, agent_idx: int, action: int):
         dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
         new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
 
@@ -201,17 +200,17 @@ class FireEnv(gym.Env):
             self.wind_cells = []
 
         if new_pos in self.wind_cells:
-            reward, new_pos = self._wind_influence(new_pos)
+            new_pos = self._wind_influence(new_pos)
             self.positions[agent_idx] = new_pos
             self.steps_without_progress[agent_idx] += 1
         else:
             penalty, collision = self._check_collisions(new_pos, agent_idx)
             if collision:
-                reward += penalty
+                self.reward += penalty
             elif new_pos in self.fires:
                 self.fires.remove(new_pos)
                 self.steps_without_progress[agent_idx] = 0
-                reward = e.FIRE_REWARD
+                self.reward += e.FIRE_REWARD
                 self.positions[agent_idx] = new_pos
                 logger.info(f'Agent {agent_idx} extinguished fire at {new_pos}: {e.FIRE_REWARD}')
             else:
@@ -221,47 +220,44 @@ class FireEnv(gym.Env):
         self.update_distances()
 
         if self.steps_without_progress[agent_idx] >= e.STAGNATION_THRESHOLD:
-            reward += e.STAGNATION_PENALTY
+            self.reward += e.STAGNATION_PENALTY
             logger.info(f'Stagnation penalty for agent {agent_idx}: {e.STAGNATION_PENALTY}')
 
         logger.info(f'Agent {agent_idx} Position = {self.positions[agent_idx]}')
-        return reward
 
     def _check_termination(self):
-        reward = 0
         terminated, truncated = False, False
         if len(self.fires) == 0:
             terminated = True
             if self.iteration_count < self.max_steps // 2:
-                reward += e.FINAL_REWARD * 2
+                self.reward += e.FINAL_REWARD * 2
                 logger.info(f'FINAL_REWARD = {e.FINAL_REWARD * 2}')
             else:
-                reward += e.FINAL_REWARD
+                self.reward += e.FINAL_REWARD
                 logger.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
             # привязать к батарее
             step_saving_bonus = (self.max_steps - self.iteration_count) * 0.5
-            reward += step_saving_bonus
+            self.reward += step_saving_bonus
             logger.info(f'Step saving bonus: +{step_saving_bonus}')
         elif self.iteration_count >= self.max_steps:
-            reward -= e.FINAL_REWARD
+            self.reward -= e.FINAL_REWARD
             logger.info(f'MAX_STEPS DONE = {-e.FINAL_REWARD}')
             truncated = True
-        return reward, terminated, truncated
+        return terminated, truncated
 
-    def _wind_influence(self, pos: tuple[int, int]) -> tuple[int, tuple[int, int]]:
-        reward = 0
+    def _wind_influence(self, pos: tuple[int, int]) -> tuple[tuple[int, int]]:
         # разделены новые и старые, чтобы проверить в логах работу
         x, y = pos
         new_x, new_y = pos
         if (x, y) in self.wind_cells:
-            new_x = x + self.wind_strength * self.wind_direction[0]
-            new_y = y + self.wind_strength * self.wind_direction[1]
+            new_x = x + (self.wind_strength + 1) * self.wind_direction[0]
+            new_y = y + (self.wind_strength + 1) * self.wind_direction[1]
             # чтобы не вылетал за границы от ветра
             new_x = np.clip(new_x, 0, self.grid_size - 1)
             new_y = np.clip(new_y, 0, self.grid_size - 1)
-            reward = e.WIND_PENALTY
+            self.reward += e.WIND_PENALTY
             logger.info(f'wind penalty {e.WIND_PENALTY} in {x, y} to {new_x, new_y}')
-        return reward, (new_x, new_y)
+        return new_x, new_y
 
     def _check_collisions(self, new_pos: tuple, agent_idx: int) -> tuple[float, bool]:
         reward = 0
