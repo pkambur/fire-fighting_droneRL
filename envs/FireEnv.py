@@ -191,6 +191,9 @@ class FireEnv(gym.Env):
                 self.fires.remove(new_pos)
                 self.steps_without_progress[agent_idx] = 0
                 self.reward += e.FIRE_REWARD
+                if self.iteration_count < self.max_steps // 2:
+                    self.reward += e.FIRE_REWARD * 0.5
+                    logger.info(f'Agent {agent_idx} fast fire extinguish bonus: +{e.FIRE_REWARD * 0.5}')
                 logger.info(f'Agent {agent_idx} extinguished fire at {new_pos}: {e.FIRE_REWARD}')
             else:
                 self.steps_without_progress[agent_idx] += 1
