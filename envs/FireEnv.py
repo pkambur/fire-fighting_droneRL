@@ -176,7 +176,8 @@ class FireEnv(gym.Env):
         return state, self.reward, terminated, truncated, {}
 
     def _take_action(self, agent_idx: int, action: int):
-        old_distance = self.distances_to_fires[agent_idx]
+        if self.fires:
+            old_distance = self.distances_to_fires[agent_idx]
         dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
         new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
 
@@ -195,7 +196,6 @@ class FireEnv(gym.Env):
         else:
             if self._check_collisions(new_pos, agent_idx):
                 self.steps_without_progress[agent_idx] += 1
-                self.positions[agent_idx] = new_pos
             elif new_pos in self.fires:
                 self.fires.remove(new_pos)
                 self.steps_without_progress[agent_idx] = 0
@@ -210,10 +210,11 @@ class FireEnv(gym.Env):
                 self.positions[agent_idx] = new_pos
                 # нужно проверить работает ли
                 self.update_fire_distances()
-                new_distance = self.distances_to_fires[agent_idx]
-                if new_distance < old_distance:
-                    self.reward += e.NEAR_FIRE_BONUS
-                    logger.info(f'Agent {agent_idx} moved closer to fire: +{e.NEAR_FIRE_BONUS}')
+                if self.fires:
+                    new_distance = self.distances_to_fires[agent_idx]
+                    if new_distance < old_distance:
+                        self.reward += e.NEAR_FIRE_BONUS
+                        logger.info(f'Agent {agent_idx} moved closer to fire: +{e.NEAR_FIRE_BONUS}')
 
         if self.steps_without_progress[agent_idx] >= e.STAGNATION_THRESHOLD:
             self.reward += e.STAGNATION_PENALTY
@@ -260,6 +261,7 @@ class FireEnv(gym.Env):
         if new_pos in [self.positions[i] for i in range(self.num_agents) if i != agent_idx]:
             self.reward += e.CRASH_PENALTY
             logger.info(f'Agent {agent_idx} collision with another agent: {e.CRASH_PENALTY}')
+            self.positions[agent_idx] = new_pos
             collision = True
         elif not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
             self.reward += e.OUT_OF_BOUNDS_PENALTY
@@ -269,6 +271,7 @@ class FireEnv(gym.Env):
             self.reward += e.OBSTACLE_PENALTY
             logger.info(f'Agent {agent_idx} hit obstacle: {e.OBSTACLE_PENALTY}')
             collision = True
+            self.positions[agent_idx] = new_pos
         return collision
 
     def _get_state(self) -> np.ndarray:
