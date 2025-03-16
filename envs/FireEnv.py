@@ -177,10 +177,6 @@ class FireEnv(gym.Env):
 
     def _take_action(self, agent_idx: int, action: int):
         old_distance = self.distances_to_fires[agent_idx]
-
-        print(f'agent {agent_idx}')
-        print(f'old {old_distance}')
-        print(self.distances_to_fires)
         dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
         new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
 
