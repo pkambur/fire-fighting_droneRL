@@ -112,10 +112,16 @@ class FireEnv(gym.Env):
     def is_valid(self, x, y):
         return 0 <= x < self.grid_size and 0 <= y < self.grid_size
 
-    def update_fire_distances(self) -> None:
-        self.distances_to_fires = sorted(
-            [min(abs(x - pos[0]) + abs(y - pos[1]) for pos in self.positions) for x, y in self.fires]
-        ) if self.fires else []
+    def update_fire_distances(self):
+        """
+        Update minimum distances from every agent
+        """
+        # self.distances_to_fires = [min(abs(x - pos[0]) + abs(y - pos[1]) for pos in self.positions) for x, y in
+        #                            self.fires] if self.fires else []
+
+        self.distances_to_fires = [
+            min(abs(px - fx) + abs(py - fy) for fx, fy in self.fires)
+            for px, py in self.positions] if self.fires else []
 
     def get_local_view(self, agent_idx: int) -> np.ndarray:
         """
@@ -155,6 +161,7 @@ class FireEnv(gym.Env):
         self.reward += e.STEP_PENALTY * self.num_agents
         logger.info(f'STEP_PENALTY = {e.STEP_PENALTY * self.num_agents}')
 
+        self.update_fire_distances()
         state = self._get_state()
 
         # расчет появления ветра должен быть привязан на макс кол-во шагов
@@ -169,8 +176,7 @@ class FireEnv(gym.Env):
         return state, self.reward, terminated, truncated, {}
 
     def _take_action(self, agent_idx: int, action: int):
-        old_distance = min(abs(self.positions[agent_idx][0] - f[0]) + abs(self.positions[agent_idx][1] - f[1])
-                           for f in self.fires)  # if self.fires  else float('inf')
+        old_distance = self.distances_to_fires[agent_idx]
 
         print(f'agent {agent_idx}')
         print(f'old {old_distance}')
@@ -193,9 +199,11 @@ class FireEnv(gym.Env):
         else:
             if self._check_collisions(new_pos, agent_idx):
                 self.steps_without_progress[agent_idx] += 1
+                self.positions[agent_idx] = new_pos
             elif new_pos in self.fires:
                 self.fires.remove(new_pos)
                 self.steps_without_progress[agent_idx] = 0
+                self.positions[agent_idx] = new_pos
                 self.reward += e.FIRE_REWARD
                 if self.iteration_count < self.max_steps // 2:
                     self.reward += e.FIRE_REWARD * 0.5
@@ -203,14 +211,13 @@ class FireEnv(gym.Env):
                 logger.info(f'Agent {agent_idx} extinguished fire at {new_pos}: {e.FIRE_REWARD}')
             else:
                 self.steps_without_progress[agent_idx] += 1
-            self.positions[agent_idx] = new_pos
-        self.update_fire_distances()
-
-        # new_distance = min(
-        #     abs(new_pos[0] - f[0]) + abs(new_pos[1] - f[1]) for f in self.fires) if self.fires else float('inf')
-        # if new_distance < old_distance:
-        #     reward += e.NEAR_FIRE_BONUS
-        #     logging.info(f'Agent {agent_idx} moved closer to fire: +{e.NEAR_FIRE_BONUS}')
+                self.positions[agent_idx] = new_pos
+                # нужно проверить работает ли
+                self.update_fire_distances()
+                new_distance = self.distances_to_fires[agent_idx]
+                if new_distance < old_distance:
+                    self.reward += e.NEAR_FIRE_BONUS
+                    logger.info(f'Agent {agent_idx} moved closer to fire: +{e.NEAR_FIRE_BONUS}')
 
         if self.steps_without_progress[agent_idx] >= e.STAGNATION_THRESHOLD:
             self.reward += e.STAGNATION_PENALTY
