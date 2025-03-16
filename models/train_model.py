@@ -5,7 +5,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import EvalCallback
 
 
-from envs.fire_env import FireEnv
+from envs.FireEnv import FireEnv
 from utils.logging_files import tensorboard_log_dir, model_name, best_model_path
 
 

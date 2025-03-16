@@ -1,7 +1,7 @@
 import csv
 import os
 
-from envs.fire_env import FireEnv
+from envs.FireEnv import FireEnv
 from models import test_episodes
 from render.user_interface import quit_pygame
 from utils.logging_files import log_csv
@@ -11,7 +11,7 @@ summary_shown = False
 logger = setup_logger()
 
 
-def test_model(model, fire_count, obstacle_count):
+def test_model(model, fire_count, obstacle_count, render=True):
     global summary_shown
 
     if os.path.exists(log_csv):
@@ -38,7 +38,8 @@ def test_model(model, fire_count, obstacle_count):
             logger.info(f"Episode = {episode}, Step {test_env.iteration_count + 1}: "
                         f"Reward = {reward}, Total Reward = {total_reward}, "
                         f"Fires Left: {len(test_env.fires)}")
-            test_env.render()
+            if render:
+                test_env.render()
             if terminated or truncated:
                 if len(test_env.fires) == 0:
                     print(f"Testing completed at step {test_env.iteration_count}: "
