@@ -295,6 +295,7 @@ class FireEnv(gym.Env):
             pygame.display.set_caption("Fire Environment")
         self.screen.fill(GREEN)
 
+        # Отрисовка игрового поля
         cell = self.cell_size
         for fire in self.fires:
             self.screen.blit(self.images["fire"], (fire[0] * cell, fire[1] * cell))
@@ -303,16 +304,42 @@ class FireEnv(gym.Env):
         self.screen.blit(self.images["base"], (self.base[0] * cell, self.base[1] * cell))
         for i in range(self.num_agents):
             self.screen.blit(self.images["agent"], (self.positions[i][0] * cell, self.positions[i][1] * cell))
-
         if self.wind.cells is not None:
             for wind in self.wind.cells:
                 self.screen.blit(self.images["wind"], (wind[0] * cell, wind[1] * cell))
 
+        # Правая панель
         font = pygame.font.Font(None, FONT_SIZE)
         status_info = pygame.Rect(self.screen_size, 0, BAR_WIDTH, self.screen_size)
         pygame.draw.rect(self.screen, WHITE, status_info)
-        draw_text(self.screen, "Game info", font, BLACK, self.screen_size, 20)
-        draw_text(self.screen, f"Step {self.iteration_count}", font, BLACK, self.screen_size, 60)
+
+        y_offset = 20
+        draw_text(self.screen, "Game info", font, BLACK, self.screen_size, y_offset)
+        y_offset += 40
+
+        # Основные показатели
+        draw_text(self.screen, f"Step: {self.iteration_count}", font, BLACK, self.screen_size, y_offset)
+        y_offset += 20
+        draw_text(self.screen, f"Fires: {len(self.fires)}", font, BLACK, self.screen_size, y_offset)
+        y_offset += 30
+
+        # Награды
+        draw_text(self.screen, f"Total Reward: {self.total_reward:.2f}", font, BLACK, self.screen_size, y_offset)
+        y_offset += 20
+        
+        # Состояние ветра
+        wind_status = "Wind: " + ("Active" if self.wind.active else "Inactive")
+        draw_text(self.screen, wind_status, font, BLACK, self.screen_size, y_offset)
+        y_offset += 20
+        wind_dir = tuple(self.wind.direction) if self.wind.direction else (0, 0)
+        draw_text(self.screen, f"Dir: {wind_dir}", font, BLACK, self.screen_size, y_offset)
+        y_offset += 20
+        draw_text(self.screen, f"Strength: {self.wind.strength if self.wind.strength else 0}", font, BLACK, self.screen_size, y_offset)
+        y_offset += 20
+        draw_text(self.screen, f"Wind On: {self.wind.steps_with_wind}", font, BLACK, self.screen_size, y_offset)
+        y_offset += 20
+        draw_text(self.screen, f"Next Wind: {self.wind.steps_from_last_wind}", font, BLACK, self.screen_size, y_offset)
+
         pygame.display.flip()
         pygame.time.delay(100)
 
