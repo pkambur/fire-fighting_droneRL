@@ -2,7 +2,6 @@ import gymnasium as gym
 import numpy as np
 import pygame
 import random
-
 from collections import deque
 from gymnasium.spaces import MultiDiscrete, Box
 from constants.colors import WHITE, GREEN, BLACK
@@ -14,7 +13,6 @@ from render.load_images import load_images
 from utils.logger import setup_logger
 
 logger = setup_logger()
-
 
 class FireEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": e.RENDER_FPS}
@@ -48,24 +46,27 @@ class FireEnv(gym.Env):
         # Пространство действий: единое для observer, 4 действия для каждого из 3 агентов
         self.action_space = MultiDiscrete([4, 4, 4])
 
-        # Пространство наблюдений для observer
+        # Пространство наблюдений для observer с добавлением ветра
         local_view_size = self.view ** 2
         low = np.array(
-            [0] +
-            [0] * self.num_agents * 2 +
-            [-self.grid_size, -self.grid_size] * self.num_agents +
-            [0] * self.fire_count + [0] * self.obstacle_count * self.num_agents +
-            [0] * (local_view_size * self.num_agents),
+            [0] +  # кол-во очагов
+            [0] * self.num_agents * 2 +  # позиции агентов (x, y)
+            [-self.grid_size, -self.grid_size] * self.num_agents +  # расстояние до базы
+            [0] * self.fire_count +  # расстояния до очагов
+            [0] * self.obstacle_count * self.num_agents +  # расстояния до препятствий
+            [0] * (local_view_size * self.num_agents) +  # локальный вид
+            [0, -1, -1, 0],  # ветер: активность (0/1), направление x/y (-1/1), сила (0)
             dtype=np.float32
         )
 
         high = np.array(
             [self.fire_count] +  # кол-во очагов
-            [self.grid_size] * self.num_agents * 2 +  # agent positions
+            [self.grid_size] * self.num_agents * 2 +  # позиции агентов
             [self.grid_size, self.grid_size] * self.num_agents +  # расстояние до базы
             [2 * self.grid_size] * self.fire_count +  # расстояние до очагов
             [2 * self.grid_size] * self.obstacle_count * self.num_agents +  # расстояния до препятствий
-            [3] * (local_view_size * self.num_agents),  # что видят агенты
+            [5] * (local_view_size * self.num_agents) +  # локальный вид (0-5, включая ветер)
+            [1, 1, 1, 3],  # ветер: активность (1), направление x/y (1), сила (3)
             dtype=np.float32
         )
         self.observation_space = Box(low=low, high=high, dtype=np.float32)
@@ -124,11 +125,6 @@ class FireEnv(gym.Env):
                                        in self.positions for x, y in self.obstacles]
 
     def get_local_view(self, agent_idx: int) -> np.ndarray:
-        """
-        Возвращает локальное представление агента (5x5 клеток вокруг).
-        Returns:
-        np.array: сплющенный массив локального вида
-        """
         pos_x, pos_y = self.positions[agent_idx]
         view_size = self.view // 2
         local_view = np.zeros((self.view, self.view), dtype=np.int32)
@@ -136,17 +132,17 @@ class FireEnv(gym.Env):
         for dx in range(-view_size, view_size + 1):
             for dy in range(-view_size, view_size + 1):
                 x, y = pos_x + dx, pos_y + dy
-                if not self.is_valid(x, y):  # 0 <= x < self.grid_size and 0 <= y < self.grid_size):
+                if not self.is_valid(x, y):
                     local_view[dx + view_size, dy + view_size] = 4  # вне поля
                 else:
                     if (x, y) in self.fires:
-                        local_view[dx + view_size, dy + view_size] = 1  # Пожар
+                        local_view[dx + view_size, dy + view_size] = 1  # пожар
                     elif (x, y) in self.obstacles:
-                        local_view[dx + view_size, dy + view_size] = 2  # Препятствие
+                        local_view[dx + view_size, dy + view_size] = 2  # препятствие
                     elif (x, y) == self.base:
-                        local_view[dx + view_size, dy + view_size] = 3  # База
+                        local_view[dx + view_size, dy + view_size] = 3  # база
                     elif (x, y) in self.wind.cells:
-                        local_view[dx + view_size, dy + view_size] = 5  # База
+                        local_view[dx + view_size, dy + view_size] = 5  # ветер
         return local_view.flatten()
 
     def step(self, actions: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
@@ -154,7 +150,6 @@ class FireEnv(gym.Env):
         logger.info(f'Step {self.iteration_count}')
         self.reward = 0
 
-        # Применяем действия ко всем агентам одновременно
         for i, action in enumerate(actions):
             self._take_action(i, action)
 
@@ -163,7 +158,6 @@ class FireEnv(gym.Env):
 
         state = self._get_state()
 
-        # расчет появления ветра должен быть привязан на макс кол-во шагов
         if self.wind.steps_from_last_wind >= random.randint(30, 50):
             self.wind.wind_activation()
         elif self.wind.steps_with_wind == self.wind.duration:
@@ -222,7 +216,6 @@ class FireEnv(gym.Env):
             else:
                 self.reward += e.FINAL_REWARD
                 logger.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
-            # привязать к батарее
             step_saving_bonus = (self.max_steps - self.iteration_count) * 0.5
             self.reward += step_saving_bonus
             logger.info(f'Step saving bonus: +{step_saving_bonus}')
@@ -233,13 +226,11 @@ class FireEnv(gym.Env):
         return terminated, truncated
 
     def _wind_influence(self, pos: tuple[int, int]) -> tuple[int, int]:
-        # разделены новые и старые, чтобы проверить в логах работу
         x, y = pos
         new_x, new_y = pos
         if (x, y) in self.wind.cells:
             new_x = x + (self.wind.strength + 1) * self.wind.direction[0]
             new_y = y + (self.wind.strength + 1) * self.wind.direction[1]
-            # чтобы не вылетал за границы от ветра
             new_x = np.clip(new_x, 0, self.grid_size - 1)
             new_y = np.clip(new_y, 0, self.grid_size - 1)
             self.reward += e.WIND_PENALTY
@@ -269,9 +260,17 @@ class FireEnv(gym.Env):
         base_distances = [[self.positions[i][0] - self.base[0], self.positions[i][1] - self.base[1]]
                           for i in range(self.num_agents)]
 
+        # Информация о ветре
+        wind_info = [
+            float(self.wind.active),  # 0 или 1
+            self.wind.direction[0] if self.wind.direction else 0,  # x-направление (-1, 0, 1)
+            self.wind.direction[1] if self.wind.direction else 0,  # y-направление (-1, 0, 1)
+            self.wind.strength if self.wind.strength else 0  # сила ветра (0-3)
+        ]
+
         state_parts = [
             np.array([len(self.fires)], dtype=np.float32),
-            (np.concatenate(self.positions))
+            np.concatenate(self.positions)
         ]
         distances_to_fires = (self.distances_to_fires +
                               [0] * (self.fire_count - len(self.distances_to_fires)))
@@ -281,7 +280,9 @@ class FireEnv(gym.Env):
             base_distances +
             [distances_to_fires] +
             [self.distances_to_obstacles] +
-            [self.get_local_view(i) for i in range(self.num_agents)])
+            [self.get_local_view(i) for i in range(self.num_agents)] +
+            [wind_info]  # Добавляем информацию о ветре
+        )
 
         return state
 
@@ -308,8 +309,7 @@ class FireEnv(gym.Env):
                 self.screen.blit(self.images["wind"], (wind[0] * cell, wind[1] * cell))
 
         font = pygame.font.Font(None, FONT_SIZE)
-        status_info = pygame.Rect(self.screen_size, 0, BAR_WIDTH,
-                                  self.screen_size)
+        status_info = pygame.Rect(self.screen_size, 0, BAR_WIDTH, self.screen_size)
         pygame.draw.rect(self.screen, WHITE, status_info)
         draw_text(self.screen, "Game info", font, BLACK, self.screen_size, 20)
         draw_text(self.screen, f"Step {self.iteration_count}", font, BLACK, self.screen_size, 60)
