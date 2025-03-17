@@ -72,25 +72,41 @@ class FireEnv(gym.Env):
         self.positions = [self.base, (1, 9), (2, 9)]
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
-        self.fires, self.obstacles = self.generate_positions(self.fire_count, self.obstacle_count)
+        self.fires, self.obstacles = self.generate_positions()
         self.update_fire_distances()
         self.total_reward = 0
         self.wind.reset()
         logger.info("Episode started")
         return self._get_state(), {}
 
-    def generate_positions(self, fire_count: int, obstacle_count: int) -> tuple[set, set]:
-        check = 0
-        fires, obstacles = {}, {}
-        while check != fire_count:
-            all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
-            all_positions -= {self.base, (1, 9), (2, 9)}
-            fires = set(random.sample(list(all_positions), fire_count))
-            all_positions -= fires
-            obstacles = set(random.sample(list(all_positions), obstacle_count))
-            for fire in fires:
-                check += self._check_availability(self.base, fire, obstacles)
-        return fires, obstacles
+    def generate_positions(self) -> tuple[set, set]:
+        all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
+        all_positions -= {self.base, (1, 9), (2, 9)}
+        fires = set(random.sample(list(all_positions), self.fire_count))
+        remaining_positions = all_positions - fires
+        obstacles = set(random.sample(list(remaining_positions), self.obstacle_count))
+
+        all_fires_accessible = True
+        for fire in fires:
+            if not self._check_availability(self.base, fire, obstacles):
+                all_fires_accessible = False
+                break
+
+        if all_fires_accessible:
+            return fires, obstacles
+
+        # check = 0
+        # fires, obstacles = {}, {}
+        # while check != self.fire_count:
+        #     print('generate positions')
+        #     all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
+        #     all_positions -= {self.base, (1, 9), (2, 9)}
+        #     fires = set(random.sample(list(all_positions), self.fire_count))
+        #     all_positions -= fires
+        #     obstacles = set(random.sample(list(all_positions), self.obstacle_count))
+        #     for fire in fires:
+        #         check += self._check_availability(self.base, fire, obstacles)
+        # return fires, obstacles
 
     def _check_availability(self, start, end, obstacles):
         start_x, start_y = start
@@ -146,7 +162,7 @@ class FireEnv(gym.Env):
                     elif (x, y) == self.base:
                         local_view[dx + view_size, dy + view_size] = 3  # База
                     elif (x, y) in self.wind.cells:
-                        local_view[dx + view_size, dy + view_size] = 5  # База
+                        local_view[dx + view_size, dy + view_size] = 5  # Ветер
         return local_view.flatten()
 
     def step(self, actions: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
