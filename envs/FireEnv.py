@@ -43,6 +43,7 @@ class FireEnv(gym.Env):
         self.obstacle_count = obstacle_count
         self.images = load_images(self.cell_size)
         self.fires, self.obstacles = None, None
+        self.info = {}
 
         # Пространство действий: единое для observer, 4 действия для каждого из 3 агентов
         self.action_space = MultiDiscrete([4, 4, 4])
@@ -162,7 +163,7 @@ class FireEnv(gym.Env):
                     elif (x, y) == self.base:
                         local_view[dx + view_size, dy + view_size] = 3  # База
                     elif (x, y) in self.wind.cells:
-                        local_view[dx + view_size, dy + view_size] = 5  # Ветер
+                        local_view[dx + view_size, dy + view_size] = 5  # База
         return local_view.flatten()
 
     def step(self, actions: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
@@ -220,6 +221,8 @@ class FireEnv(gym.Env):
                 if self.iteration_count < self.max_steps // 2:
                     self.reward += e.FIRE_REWARD * 0.5
                     logger.info(f'Agent {agent_idx} fast fire extinguish bonus: +{e.FIRE_REWARD * 0.5}')
+                self.info["The goal has been achieved"] = True
+                self.positions[agent_idx] = new_pos
                 logger.info(f'Agent {agent_idx} extinguished fire at {new_pos}: {e.FIRE_REWARD}')
             else:
                 self.steps_without_progress[agent_idx] += 1
@@ -236,7 +239,7 @@ class FireEnv(gym.Env):
             self.reward += e.STAGNATION_PENALTY
             logger.info(f'Stagnation penalty for agent {agent_idx}: {e.STAGNATION_PENALTY}')
 
-        logger.info(f'Agent {agent_idx} Position = {self.positions[agent_idx]} reward {self.reward}')
+        logger.info(f'Agent {agent_idx} Position = {self.positions[agent_idx]}')
 
     def _check_termination(self):
         terminated, truncated = False, False
@@ -286,6 +289,7 @@ class FireEnv(gym.Env):
         elif new_pos in self.obstacles:
             self.reward += e.OBSTACLE_PENALTY
             logger.info(f'Agent {agent_idx} hit obstacle: {e.OBSTACLE_PENALTY}')
+            self.info["Collision with an obstacle"] = True
             collision = True
             self.positions[agent_idx] = new_pos
         return collision
