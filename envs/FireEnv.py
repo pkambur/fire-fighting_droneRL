@@ -78,7 +78,7 @@ class FireEnv(gym.Env):
         self.total_reward = 0
         self.wind.reset()
         logger.info("Episode started")
-        return self._get_state(), {}
+        return self._get_state(), self.info
 
     def generate_positions(self) -> tuple[set, set]:
         all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
@@ -95,19 +95,6 @@ class FireEnv(gym.Env):
 
         if all_fires_accessible:
             return fires, obstacles
-
-        # check = 0
-        # fires, obstacles = {}, {}
-        # while check != self.fire_count:
-        #     print('generate positions')
-        #     all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
-        #     all_positions -= {self.base, (1, 9), (2, 9)}
-        #     fires = set(random.sample(list(all_positions), self.fire_count))
-        #     all_positions -= fires
-        #     obstacles = set(random.sample(list(all_positions), self.obstacle_count))
-        #     for fire in fires:
-        #         check += self._check_availability(self.base, fire, obstacles)
-        # return fires, obstacles
 
     def _check_availability(self, start, end, obstacles):
         start_x, start_y = start
@@ -170,6 +157,7 @@ class FireEnv(gym.Env):
         self.iteration_count += 1
         logger.info(f'Step {self.iteration_count}')
         self.reward = 0
+        self.info = {}
 
         # Применяем действия ко всем агентам одновременно
         for i, action in enumerate(actions):
@@ -190,7 +178,7 @@ class FireEnv(gym.Env):
         terminated, truncated = self._check_termination()
         self.total_reward += self.reward
 
-        return state, self.reward, terminated, truncated, {}
+        return state, self.reward, terminated, truncated, self.info
 
     def _take_action(self, agent_idx: int, action: int):
         if self.fires:
@@ -213,6 +201,7 @@ class FireEnv(gym.Env):
         else:
             if self._check_collisions(new_pos, agent_idx):
                 self.steps_without_progress[agent_idx] += 1
+                self.info["Collision"] = True
             elif new_pos in self.fires:
                 self.fires.remove(new_pos)
                 self.steps_without_progress[agent_idx] = 0
@@ -289,7 +278,6 @@ class FireEnv(gym.Env):
         elif new_pos in self.obstacles:
             self.reward += e.OBSTACLE_PENALTY
             logger.info(f'Agent {agent_idx} hit obstacle: {e.OBSTACLE_PENALTY}')
-            self.info["Collision with an obstacle"] = True
             collision = True
             self.positions[agent_idx] = new_pos
         return collision

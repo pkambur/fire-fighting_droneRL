@@ -42,24 +42,21 @@ def test_model(model, fire_count, obstacle_count, render=True):
             obs, reward, terminated, truncated, info = test_env.step(actions)
             total_reward += reward
 
-            metrics["total_reward"] += reward
-            metrics["total_steps"] += 1
-
             with open(log_csv, mode='a', newline='') as file:
                 writer = csv.writer(file)
                 writer.writerow([episode, test_env.iteration_count] +
                                 [len(test_env.fires), reward] + list(actions))
-            logger.info(f"Episode = {episode}, Step {test_env.iteration_count + 1}: "
-                        f"Reward = {reward}, Total Reward = {total_reward}, "
-                        f"Fires Left: {len(test_env.fires)}")
 
             if render:
                 test_env.render()
 
+            metrics["total_reward"] += reward
+            metrics["total_steps"] += 1
+
             if info.get("The goal has been achieved", False):
                 metrics["achieved_goals"] += 1
 
-            if info.get("Collision with an obstacle", False):
+            if info.get("Collision", False):
                 metrics["collision_count"] += 1
 
             if terminated or truncated:
@@ -81,14 +78,13 @@ def test_model(model, fire_count, obstacle_count, render=True):
     success_rate = (metrics["successful_attempts"] / test_episodes) * 100
     avg_reward = metrics["total_reward"] / test_episodes
     step_efficiency = (metrics["total_steps"] / metrics["achieved_goals"]) if metrics["achieved_goals"] else 0
-    collision_rate = metrics["collision_count"] / test_episodes * 100
-
+    collision_rate = metrics["collision_count"] / test_episodes
     print(f"""
     Evaluation results:
     Success Rate: {success_rate:.1f} %
     Average Reward: {avg_reward:.2f}
     Step Efficiency: {step_efficiency:.1f} steps/goal
-    Collision Rate: {collision_rate:.1f} %
+    Collision Rate: {collision_rate:.1f} in episode
     """)
 
     if not summary_shown:

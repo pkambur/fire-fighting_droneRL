@@ -37,7 +37,7 @@ def train_and_evaluate(fire_count, obstacle_count):
         eval_freq=1000,
         render=False
     )
-    model.learn(total_timesteps=50000)
+    model.learn(total_timesteps=100000)
     mean_reward, std_reward = evaluate_policy(model, vec_env, n_eval_episodes=10)
     print(f"Среднее вознаграждение после тренировки: {mean_reward} +/- {std_reward}")
     model.save(model_name)
