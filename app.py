@@ -8,7 +8,7 @@ from utils.logging_files import model_name
 from utils.logger import setup_logger
 
 logger = setup_logger()
-render_mode = True
+render_mode = False
 
 
 def run():

@@ -13,16 +13,14 @@ BASE_POSITION = (0, 9)
 AGENT_VIEW = 5
 
 # Награды и штрафы
-STEP_PENALTY = -0.1  #  штраф за шаг
-FIRE_REWARD = 500  #  награда за тушение
-OBSTACLE_PENALTY = -30  #  штраф за препятствие
-OUT_OF_BOUNDS_PENALTY = -5  #  штраф за выход за границы
-BASE_PENALTY = 50
-CRASH_PENALTY = -100
-WIND_PENALTY = - 30
-NEAR_FIRE_BONUS = 20  #  бонус за приближение
-STAGNATION_THRESHOLD = 20  #  порог застоя
-STAGNATION_PENALTY = -2  #  штраф за застой
-FINAL_REWARD = 2000  #  награда за тушение всех пожаров
+STEP_PENALTY = -0.02  #  штраф за шаг
+FIRE_REWARD = 1  #  награда за тушение
+OBSTACLE_PENALTY = -0.2  #  штраф за препятствие
+OUT_OF_BOUNDS_PENALTY = -0.1  #  штраф за выход за границы
+CRASH_PENALTY = -0.3
+WIND_PENALTY = -0.15
 
-
+NEAR_FIRE_BONUS = 0.05  #  бонус за приближение
+STAGNATION_THRESHOLD = 10  #  порог застоя
+STAGNATION_PENALTY = -0.1  #  штраф за застой
+FINAL_REWARD = 0.5  #  награда за тушение всех пожаров

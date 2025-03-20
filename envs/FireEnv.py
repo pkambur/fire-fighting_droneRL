@@ -54,7 +54,8 @@ class FireEnv(gym.Env):
             [0] +
             [0] * self.num_agents * 2 +
             [0] * self.fire_count +
-            [0] * (local_view_size * self.num_agents),
+            [0] * (local_view_size * self.num_agents) +
+            [0, -1, -1, 0],
             dtype=np.float32
         )
 
@@ -62,7 +63,8 @@ class FireEnv(gym.Env):
             [self.fire_count] +  # кол-во очагов
             [self.grid_size] * self.num_agents * 2 +  # agent positions
             [2 * self.grid_size] * self.fire_count +  # расстояние до очагов
-            [3] * (local_view_size * self.num_agents),  # что видят агенты
+            [3] * (local_view_size * self.num_agents) +  # что видят агенты
+            [1, 1, 1, 3],  # ветер: активность направление x/y, сила
             dtype=np.float32
         )
         self.observation_space = Box(low=low, high=high, dtype=np.float32)
@@ -118,11 +120,8 @@ class FireEnv(gym.Env):
 
     def update_fire_distances(self):
         """
-        Update minimum distances from every agent
+        Update minimum distances to closed fire from every agent
         """
-        # self.distances_to_fires = [min(abs(x - pos[0]) + abs(y - pos[1]) for pos in self.positions) for x, y in
-        #                            self.fires] if self.fires else []
-
         self.distances_to_fires = [
             min(abs(px - fx) + abs(py - fy) for fx, fy in self.fires)
             for px, py in self.positions] if self.fires else []
@@ -140,17 +139,17 @@ class FireEnv(gym.Env):
         for dx in range(-view_size, view_size + 1):
             for dy in range(-view_size, view_size + 1):
                 x, y = pos_x + dx, pos_y + dy
-                if not self.is_valid(x, y):  # 0 <= x < self.grid_size and 0 <= y < self.grid_size):
+                if not self.is_valid(x, y):
                     local_view[dx + view_size, dy + view_size] = 4  # вне поля
                 else:
                     if (x, y) in self.fires:
-                        local_view[dx + view_size, dy + view_size] = 1  # Пожар
+                        local_view[dx + view_size, dy + view_size] = 1  # пожар
                     elif (x, y) in self.obstacles:
-                        local_view[dx + view_size, dy + view_size] = 2  # Препятствие
+                        local_view[dx + view_size, dy + view_size] = 2  # препятствие
                     elif (x, y) == self.base:
-                        local_view[dx + view_size, dy + view_size] = 3  # База
+                        local_view[dx + view_size, dy + view_size] = 3  # база
                     elif (x, y) in self.wind.cells:
-                        local_view[dx + view_size, dy + view_size] = 5  # База
+                        local_view[dx + view_size, dy + view_size] = 5  # ветер
         return local_view.flatten()
 
     def step(self, actions: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
@@ -159,7 +158,6 @@ class FireEnv(gym.Env):
         self.reward = 0
         self.info = {}
 
-        # Применяем действия ко всем агентам одновременно
         for i, action in enumerate(actions):
             self._take_action(i, action)
 
@@ -257,7 +255,6 @@ class FireEnv(gym.Env):
         if (x, y) in self.wind.cells:
             new_x = x + (self.wind.strength + 1) * self.wind.direction[0]
             new_y = y + (self.wind.strength + 1) * self.wind.direction[1]
-            # чтобы не вылетал за границы от ветра
             new_x = np.clip(new_x, 0, self.grid_size - 1)
             new_y = np.clip(new_y, 0, self.grid_size - 1)
             self.reward += e.WIND_PENALTY
@@ -290,10 +287,20 @@ class FireEnv(gym.Env):
         distances_to_fires = (self.distances_to_fires +
                               [0] * (self.fire_count - len(self.distances_to_fires)))
 
+        # Информация о ветре
+        wind_info = [
+            int(self.wind.active),
+            self.wind.direction[0] if self.wind.direction else 0,  # x-направление (-1, 0, 1)
+            self.wind.direction[1] if self.wind.direction else 0,  # y-направление (-1, 0, 1)
+            self.wind.strength
+        ]
+        print(wind_info)
+
         state = np.concatenate(
             state_parts +
             [distances_to_fires] +
-            [self.get_local_view(i) for i in range(self.num_agents)])
+            [self.get_local_view(i) for i in range(self.num_agents)] +
+            [wind_info])
 
         return state
 
@@ -314,17 +321,43 @@ class FireEnv(gym.Env):
         self.screen.blit(self.images["base"], (self.base[0] * cell, self.base[1] * cell))
         for i in range(self.num_agents):
             self.screen.blit(self.images["agent"], (self.positions[i][0] * cell, self.positions[i][1] * cell))
-
         if self.wind.cells is not None:
             for wind in self.wind.cells:
                 self.screen.blit(self.images["wind"], (wind[0] * cell, wind[1] * cell))
 
+        # Правая панель
         font = pygame.font.Font(None, FONT_SIZE)
-        status_info = pygame.Rect(self.screen_size, 0, BAR_WIDTH,
-                                  self.screen_size)
+        status_info = pygame.Rect(self.screen_size, 0, BAR_WIDTH, self.screen_size)
         pygame.draw.rect(self.screen, WHITE, status_info)
-        draw_text(self.screen, "Game info", font, BLACK, self.screen_size, 20)
-        draw_text(self.screen, f"Step {self.iteration_count}", font, BLACK, self.screen_size, 60)
+
+        y_offset = 20
+        draw_text(self.screen, "Game info", font, BLACK, self.screen_size, y_offset)
+        y_offset += 40
+
+        # Основные показатели
+        draw_text(self.screen, f"Step: {self.iteration_count}", font, BLACK, self.screen_size, y_offset)
+        y_offset += 20
+        draw_text(self.screen, f"Fires: {len(self.fires)}", font, BLACK, self.screen_size, y_offset)
+        y_offset += 30
+
+        # Награды
+        draw_text(self.screen, f"Total Reward: {self.total_reward:.2f}", font, BLACK, self.screen_size, y_offset)
+        y_offset += 20
+
+        # Состояние ветра
+        wind_status = "Wind: " + ("Active" if self.wind.active else "Inactive")
+        draw_text(self.screen, wind_status, font, BLACK, self.screen_size, y_offset)
+        y_offset += 20
+        wind_dir = tuple(self.wind.direction) if self.wind.direction else (0, 0)
+        draw_text(self.screen, f"Dir: {wind_dir}", font, BLACK, self.screen_size, y_offset)
+        y_offset += 20
+        draw_text(self.screen, f"Strength: {self.wind.strength if self.wind.strength else 0}", font, BLACK,
+                  self.screen_size, y_offset)
+        y_offset += 20
+        draw_text(self.screen, f"Wind On: {self.wind.steps_with_wind}", font, BLACK, self.screen_size, y_offset)
+        y_offset += 20
+        draw_text(self.screen, f"Next Wind: {self.wind.steps_from_last_wind}", font, BLACK, self.screen_size, y_offset)
+
         pygame.display.flip()
         pygame.time.delay(100)
 
