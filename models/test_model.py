@@ -2,6 +2,7 @@ import csv
 import os
 
 from envs.FireEnv import FireEnv
+from envs.FireEnv2 import FireEnv2
 from models import test_episodes
 from render.user_interface import quit_pygame
 from utils.logging_files import log_csv
@@ -11,7 +12,7 @@ summary_shown = False
 logger = setup_logger()
 
 
-def test_model(model, fire_count, obstacle_count, render=True):
+def test_model(scenario, model, fire_count, obstacle_count, render=True):
     global summary_shown
 
     if os.path.exists(log_csv):
@@ -28,8 +29,10 @@ def test_model(model, fire_count, obstacle_count, render=True):
         "collision_count": 0,
         "achieved_goals": 0
     }
-
-    test_env = FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode="human")
+    if scenario == 1:
+        test_env = FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode="human")
+    elif scenario == 2:
+        test_env = FireEnv2(fire_count=fire_count, obstacle_count=obstacle_count, render_mode="human")
 
     logger.info("Starting model testing...")
 

@@ -4,6 +4,7 @@ from tkinter import messagebox
 
 from pygame import Surface
 
+from envs import GRID_SIZE
 from render import WEIGHT, HEIGHT, FONT_SIZE
 import constants.colors as colors
 
@@ -32,25 +33,33 @@ def show_input_window():
     root = tk.Tk()
     root.title("Настройки игры")
     root.geometry("350x350")
-    tk.Label(root, text="Поле 10x10", font=("Arial", 12)).pack(pady=10)
+    tk.Label(root, text=f"Поле {GRID_SIZE}x{GRID_SIZE}", font=("Arial", 12)).pack(pady=10)
     tk.Label(root, text="Введите:", font=("Arial", 10)).pack(pady=5)
+
+    scenario_var = tk.StringVar()
+    tk.Label(root, text="Сценарий 1 - 2").pack()
+    tk.Entry(root, textvariable=scenario_var).pack()
+
     fire_var = tk.StringVar()
-    obstacle_var = tk.StringVar()
     tk.Label(root, text="Очаги").pack()
     tk.Entry(root, textvariable=fire_var).pack()
+
+    obstacle_var = tk.StringVar()
     tk.Label(root, text="Препятствия").pack()
     tk.Entry(root, textvariable=obstacle_var).pack()
-    result = [None, None]
+    result = [None, None, None]
 
     def submit():
         try:
+            scenario = int(scenario_var.get()) if scenario_var.get() else 1
             fire = int(fire_var.get()) if fire_var.get() else 0
             obstacles = int(obstacle_var.get()) if obstacle_var.get() else 0
-            if fire + obstacles > 50:
+            if fire + obstacles > GRID_SIZE ** 2 // 2:
                 messagebox.showerror("Ошибка", "Сумма > 50")
             else:
-                result[0] = fire
-                result[1] = obstacles
+                result[0] = scenario
+                result[1] = fire
+                result[2] = obstacles
                 root.quit()
         except ValueError:
             messagebox.showerror("Ошибка", "Вводить только цифры!")
@@ -58,9 +67,9 @@ def show_input_window():
     tk.Button(root, text="Начать", command=submit).pack(pady=10)
     root.mainloop()
     root.destroy()
-    if result[0] is None or result[1] is None:
-        return None, None
-    return result[0], result[1]
+    if result[0] is None or result[1] is None or result[2] is None:
+        return None, None, None
+    return result[0], result[1], result[2]
 
 
 def show_summary_window(fire_count, fire_done, obstacle_count, iteration_count, total_reward):
