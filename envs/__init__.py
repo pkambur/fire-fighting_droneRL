@@ -1,6 +1,6 @@
 # Константы сетки и визуализации
 GRID_SIZE = 20
-CELL_SIZE = 50
+CELL_SIZE = 40
 MAX_ELEMENTS = GRID_SIZE * GRID_SIZE // 2
 RENDER_FPS = 10
 

@@ -294,7 +294,6 @@ class FireEnv(gym.Env):
             self.wind.direction[1] if self.wind.direction else 0,  # y-направление (-1, 0, 1)
             self.wind.strength
         ]
-        print(wind_info)
 
         state = np.concatenate(
             state_parts +
