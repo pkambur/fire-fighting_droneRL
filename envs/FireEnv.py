@@ -332,8 +332,8 @@ class FireEnv(gym.Env):
             for wind in self.wind.cells:
                 self.screen.blit(self.images["wind"], (wind[0] * cell, wind[1] * cell))
 
-        for i in range(self.grid_size + houses_margin):
-            for j in range(self.grid_size, self.grid_size + houses_margin):
+        for i in range(0, self.grid_size + houses_margin, 2):
+            for j in range(self.grid_size, self.grid_size + houses_margin, 2):
                 self.screen.blit(self.images["houses"], (i * cell, j * cell))
 
         # Правая панель
