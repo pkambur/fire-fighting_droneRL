@@ -3,7 +3,7 @@ import os
 
 from envs.FireEnv import FireEnv
 from envs.FireEnv2 import FireEnv2
-from models import test_episodes
+from models.model_config import test_episodes
 from render.user_interface import quit_pygame
 from utils.logging_files import log_csv
 from utils.logger import setup_logger

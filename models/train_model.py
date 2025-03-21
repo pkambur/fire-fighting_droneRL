@@ -8,6 +8,7 @@ from stable_baselines3.common.callbacks import EvalCallback
 
 from envs.FireEnv import FireEnv
 from envs.FireEnv2 import FireEnv2
+from models.model_config import PPO_DEFAULT_CONFIG
 from utils.logging_files import tensorboard_log_dir, model_name, best_model_path
 
 
@@ -24,19 +25,20 @@ def train_and_evaluate(scenario, fire_count, obstacle_count):
 
     vec_env = make_vec_env(make_env, n_envs=1)
     os.makedirs(tensorboard_log_dir, exist_ok=True)
+    cfg = PPO_DEFAULT_CONFIG
     model = PPO(
-        "MlpPolicy",
-        vec_env,
-        verbose=1,
-        learning_rate=0.0001,
-        n_steps=4096,
-        batch_size=256,
-        n_epochs=5,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        clip_range_vf=0.2,
-        ent_coef=0.01,
+        policy=cfg["policy"],
+        env = vec_env,
+        verbose=cfg["verbose"],
+        learning_rate=cfg["learning_rate"],
+        n_steps=cfg["n_steps"],
+        batch_size=cfg["batch_size"],
+        n_epochs=cfg["n_epochs"],
+        gamma=cfg["gamma"],
+        gae_lambda=cfg["gae_lambda"],
+        clip_range=cfg["clip_range"],
+        clip_range_vf=cfg["clip_range_vf"],
+        ent_coef=cfg["ent_coef"],
         tensorboard_log=tensorboard_log_dir
     )
     eval_callback = EvalCallback(
@@ -46,7 +48,7 @@ def train_and_evaluate(scenario, fire_count, obstacle_count):
         eval_freq=1000,
         render=False
     )
-    model.learn(total_timesteps=5000, progress_bar=True)
+    model.learn(total_timesteps=100000, progress_bar=True)
     mean_reward, std_reward = evaluate_policy(model, vec_env, n_eval_episodes=10)
     print(f"Среднее вознаграждение после тренировки: {mean_reward} +/- {std_reward}")
     model.save(model_name + str(scenario))

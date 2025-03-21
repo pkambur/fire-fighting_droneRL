@@ -160,6 +160,8 @@ class FireEnv(gym.Env):
         logger.info(f'Step {self.iteration_count}')
         self.reward = 0
         self.info = {}
+        self.wind.check()
+
         # сделать вылет по очереди
         for i, action in enumerate(actions):
             self._take_action(i, action)
@@ -169,12 +171,6 @@ class FireEnv(gym.Env):
 
         self.update_fire_distances()
         state = self._get_state()
-
-        # расчет появления ветра должен быть привязан на макс кол-во шагов
-        if self.wind.steps_from_last_wind >= random.randint(30, 50):
-            self.wind.wind_activation()
-        elif self.wind.steps_with_wind == self.wind.duration:
-            self.wind.active = False
 
         terminated, truncated = self._check_termination()
         self.total_reward += self.reward
@@ -186,14 +182,6 @@ class FireEnv(gym.Env):
             old_distance = self.distances_to_fires[agent_idx]
         dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
         new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
-
-        if self.wind.active:
-            self.wind.steps_with_wind += 1
-            self.wind.steps_from_last_wind = 0
-        else:
-            self.wind.steps_with_wind = 0
-            self.wind.steps_from_last_wind += 1
-            self.wind.cells = []
 
         if new_pos in self.wind.cells:
             new_pos = self._wind_influence(new_pos)

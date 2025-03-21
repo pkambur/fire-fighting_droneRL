@@ -25,6 +25,7 @@ class Wind:
         self.active = False
         self.strength = 0
         self.direction = []
+        self.cells = []
         self.duration = random.randint(wind_period_start, wind_period_end)
         self.steps_with_wind = 0
         self.steps_from_last_wind = 0
@@ -41,6 +42,18 @@ class Wind:
         self.strength = random.randint(strength_start, strength_end)
         self.cells = self._calculate_wind_cells(wind_start_cell)
         logger.info(f"wind {self.cells}")
+
+    def check(self):
+        if self.active:
+            self.steps_with_wind += 1
+            self.steps_from_last_wind = 0
+            if self.steps_with_wind == self.duration:
+                self.reset()
+        else:
+            self.steps_with_wind = 0
+            self.steps_from_last_wind += 1
+            if self.steps_from_last_wind >= random.randint(30, 50):
+                self.wind_activation()
 
     def _calculate_wind_cells(self, start):
         x_start, y_start = start
