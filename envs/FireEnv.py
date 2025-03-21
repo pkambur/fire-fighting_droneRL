@@ -5,7 +5,7 @@ import random
 
 from collections import deque
 from gymnasium.spaces import MultiDiscrete, Box
-from constants.colors import WHITE, GREEN, BLACK
+from constants.colors import WHITE, GREEN, BLACK, LIGHT_GRAY
 import envs as e
 from envs.Wind import Wind
 from render import BAR_WIDTH, FONT_SIZE
@@ -25,7 +25,7 @@ class FireEnv(gym.Env):
         self.cell_size = e.CELL_SIZE
         self.screen_size = self.grid_size * self.cell_size
         self.num_agents = 3
-        self.base = [(i, self.grid_size - 1) for i in range(self.num_agents)] #e.BASE_POSITION
+        self.base = [(i, self.grid_size) for i in range(self.num_agents)] #e.BASE_POSITION
         self.positions = self.base.copy()  #[self.base, (1, 9), (2, 9)]  # Начальные позиции 3 агентов
         self.render_mode = render_mode
         self.steps_without_progress = [0] * self.num_agents
@@ -255,9 +255,7 @@ class FireEnv(gym.Env):
 
     def _check_collisions(self, new_pos: tuple, agent_idx: int) -> bool:
         collision = False
-        # if new_pos in [self.positions[i] for i in range(self.num_agents) if i != agent_idx]:
-        # проще проверка и если позволить им сталкиваться на 1 шаге, так как вылет с одного места сейчас
-        if len(set(self.positions)) < self.num_agents:# and self.iteration_count != 1:
+        if new_pos in [self.positions[i] for i in range(self.num_agents) if i != agent_idx]:
             self.reward += e.CRASH_PENALTY
             logger.info(f'Agent {agent_idx} collision with another agent: {e.CRASH_PENALTY}')
             # self.positions[agent_idx] = new_pos
@@ -313,25 +311,25 @@ class FireEnv(gym.Env):
             self.screen.blit(self.images["fire"], (fire[0] * cell, fire[1] * cell))
         for obstacle in self.obstacles:
             self.screen.blit(self.images["obstacle"], (obstacle[0] * cell, obstacle[1] * cell))
-        for i in range(self.num_agents):
-            self.screen.blit(self.images["agent"], (self.positions[i][0] * cell, self.positions[i][1] * cell))
         for tree in self.trees:
             self.screen.blit(self.images["tree"], (tree[0] * cell, tree[1] * cell))
         if self.wind.cells is not None:
             for wind in self.wind.cells:
                 self.screen.blit(self.images["wind"], (wind[0] * cell, wind[1] * cell))
 
-        for i in range(0, self.grid_size + houses_margin, 2):
+        for i in range(1 + len(self.base), self.grid_size + houses_margin, 2):
             for j in range(self.grid_size, self.grid_size + houses_margin, 2):
                 self.screen.blit(self.images["houses"], (i * cell, j * cell))
         for base in self.base:
             self.screen.blit(self.images["base"], (base[0] * cell, base[1] * cell))
+        for i in range(self.num_agents):
+            self.screen.blit(self.images["agent"], (self.positions[i][0] * cell, self.positions[i][1] * cell))
 
         # Правая панель
         size = self.screen_size + (houses_margin * cell)
         font = pygame.font.Font(None, FONT_SIZE)
         status_info = pygame.Rect(self.screen_size, 0, BAR_WIDTH, size)
-        pygame.draw.rect(self.screen, WHITE, status_info)
+        pygame.draw.rect(self.screen, LIGHT_GRAY, status_info)
 
         x_offset = self.screen_size + 5
         y_offset = 20
