@@ -41,9 +41,8 @@ class FireEnv(gym.Env):
             fire_count, obstacle_count = show_input_window()
         self.fire_count = fire_count
         self.obstacle_count = obstacle_count
-        self.tree_count = int((self.grid_size ** 2 - self.fire_count - self.obstacle_count) * e.TREE_PERCENT)
         self.images = load_images(self.cell_size)
-        self.fires, self.obstacles, self.trees = None, None, None
+        self.fires, self.obstacles, self.trees = [], [], []
         self.info = {}
 
         # Пространство действий: единое для observer, 4 действия для каждого из 3 агентов
@@ -96,9 +95,11 @@ class FireEnv(gym.Env):
                 all_fires_accessible = False
                 break
 
+        tree_count = int((self.grid_size ** 2 - self.fire_count - self.obstacle_count) * e.TREE_PERCENT)
+
         if all_fires_accessible:
             all_positions -= obstacles
-            trees = set(random.sample(list(all_positions), self.tree_count))
+            trees = set(random.sample(list(all_positions), tree_count))
             return fires, obstacles, trees
 
     def _check_availability(self, start, end, obstacles):
@@ -162,9 +163,8 @@ class FireEnv(gym.Env):
         self.info = {}
         self.wind.check()
 
-        # сделать вылет по очереди
-        for i, action in enumerate(actions):
-            self._take_action(i, action)
+        for agent_idx, action in enumerate(actions):
+            self._take_action(agent_idx, action)
 
         self.reward += e.STEP_PENALTY * self.num_agents
         logger.info(f'STEP_PENALTY = {e.STEP_PENALTY * self.num_agents}')
@@ -224,12 +224,12 @@ class FireEnv(gym.Env):
         terminated, truncated = False, False
         if len(self.fires) == 0:
             terminated = True
-            if self.iteration_count < self.max_steps // 2:
-                self.reward += e.FINAL_REWARD * 2
-                logger.info(f'FINAL_REWARD = {e.FINAL_REWARD * 2}')
-            else:
-                self.reward += e.FINAL_REWARD
-                logger.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
+            # if self.iteration_count < self.max_steps // 2:
+            #     self.reward += e.FINAL_REWARD * 2
+            #     logger.info(f'FINAL_REWARD = {e.FINAL_REWARD * 2}')
+            # else:
+            self.reward += e.FINAL_REWARD
+            logger.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
             # привязать к батарее
             step_saving_bonus = (self.max_steps - self.iteration_count) * 0.5
             self.reward += step_saving_bonus
@@ -255,10 +255,12 @@ class FireEnv(gym.Env):
 
     def _check_collisions(self, new_pos: tuple, agent_idx: int) -> bool:
         collision = False
-        if new_pos in [self.positions[i] for i in range(self.num_agents) if i != agent_idx]:
+        # if new_pos in [self.positions[i] for i in range(self.num_agents) if i != agent_idx]:
+        # проще проверка и если позволить им сталкиваться на 1 шаге, так как вылет с одного места сейчас
+        if len(set(self.positions)) < self.num_agents and self.iteration_count != 1:
             self.reward += e.CRASH_PENALTY
             logger.info(f'Agent {agent_idx} collision with another agent: {e.CRASH_PENALTY}')
-            self.positions[agent_idx] = new_pos
+            # self.positions[agent_idx] = new_pos
             collision = True
         elif not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
             self.reward += e.OUT_OF_BOUNDS_PENALTY

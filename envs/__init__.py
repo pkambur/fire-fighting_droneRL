@@ -11,6 +11,9 @@ MIN_BATTERY = 10
 BATTERY_THRESHOLD = 10
 BASE_RECHARGE = 50
 BASE_POSITION = (0, GRID_SIZE - 1)
+# привязать к кол-ву роботов и каждый в своей клетке стартует
+BASE_POSITIONS = [(0, GRID_SIZE - 1), (1, GRID_SIZE - 1), (2, GRID_SIZE - 1)]
+
 AGENT_VIEW = 5
 
 # Награды и штрафы
@@ -24,4 +27,4 @@ WIND_PENALTY = -0.15
 NEAR_FIRE_BONUS = 0.05  # бонус за приближение
 STAGNATION_THRESHOLD = 10  # порог застоя
 STAGNATION_PENALTY = -0.1  # штраф за застой
-FINAL_REWARD = 0.5  # награда за тушение всех пожаров
+FINAL_REWARD = 5  # награда за тушение всех пожаров

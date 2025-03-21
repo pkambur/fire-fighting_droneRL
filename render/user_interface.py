@@ -81,7 +81,7 @@ def show_summary_window(fire_count, fire_done, obstacle_count, iteration_count, 
         f"Количество очагов: {fire_count}",
         f"Потушено: {fire_done}",
         f"Препятствий: {obstacle_count}",
-        f"Суммарная награда: {total_reward}"
+        f"Суммарная награда: {round(total_reward, 2)}"
     ]
     for i, line in enumerate(lines):
         draw_text(screen, line, font, colors.BLACK, 50, 50 + i * 40)

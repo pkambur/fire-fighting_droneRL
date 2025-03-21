@@ -1,6 +1,7 @@
 from tkinter import messagebox
 from stable_baselines3 import PPO
 
+from models.optuna_train import optimize_hyperparameters
 from models.train_model import train_and_evaluate
 from models.test_model import test_model
 from render.user_interface import show_input_window, show_test_prompt_window, show_start_window
@@ -8,7 +9,7 @@ from utils.logging_files import model_name
 from utils.logger import setup_logger
 
 logger = setup_logger()
-render_mode = True
+render_mode = False
 
 
 def run():
@@ -32,11 +33,13 @@ def run():
     else:
         print("Выберите режим работы\n"
               "1 - обучение модели\n"
-              "2 - тестирование модели")
-        mode = int(input())
-        if mode == 1:
-            try:
-                scenario, fire_count, obstacle_count = get_data_from_user()
+              "2 - тестирование модели\n"
+              "3 - подбор  optuna")
+
+        try:
+            mode = int(input())
+            scenario, fire_count, obstacle_count = get_data_from_user()
+            if mode == 1:
                 logger.info("Starting model training...")
                 model = train_and_evaluate(scenario, fire_count, obstacle_count)
                 logger.info("Training completed!")
@@ -45,17 +48,15 @@ def run():
                     test_model(scenario, model, fire_count, obstacle_count, render=False)
                 else:
                     print("Недопустимая операция")
-            except ValueError:
-                print("Нужно ввести целые числа.")
-        elif mode == 2:
-            try:
-                scenario, fire_count, obstacle_count = get_data_from_user()
+            elif mode == 2:
                 model = PPO.load(model_name + str(scenario))
                 test_model(scenario, model, fire_count, obstacle_count, render=False)
-            except ValueError:
-                print("Введенные данные не соответствуют модели!")
-        else:
-            print("Недопустимая операция")
+            elif mode == 3:
+                optimize_hyperparameters(scenario, fire_count, obstacle_count)
+            else:
+                print("Недопустимая операция")
+        except ValueError:
+            print("Нужно ввести целые числа.")
 
 
 def get_data_from_user():

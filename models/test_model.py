@@ -48,7 +48,7 @@ def test_model(scenario, model, fire_count, obstacle_count, render=True):
             with open(log_csv, mode='a', newline='') as file:
                 writer = csv.writer(file)
                 writer.writerow([episode, test_env.iteration_count] +
-                                [len(test_env.fires), reward] + list(actions))
+                                [len(test_env.fires), round(reward, 2)] + list(actions))
 
             if render:
                 test_env.render()
@@ -65,14 +65,14 @@ def test_model(scenario, model, fire_count, obstacle_count, render=True):
             if terminated or truncated:
                 if len(test_env.fires) == 0:
                     print(f"Testing completed at step {test_env.iteration_count}: "
-                          f"All fires extinguished! Total Reward: {total_reward}")
+                          f"All fires extinguished! Total Reward: {round(total_reward, 2)}")
                     metrics["successful_attempts"] += 1
                 elif test_env.iteration_count + 1 >= test_env.max_steps:
                     print(f"Testing completed at step {test_env.iteration_count}: "
-                          f"Step limit reached. Total Reward: {total_reward}")
+                          f"Step limit reached. Total Reward: {round(total_reward, 2)}")
                 else:
                     print(f"Testing completed at step {test_env.iteration_count} "
-                          f"for unknown reason. Total Reward: {total_reward}")
+                          f"for unknown reason. Total Reward: {round(total_reward, 2)}")
                 if not summary_shown:
                     test_env.close()
                     summary_shown = True
