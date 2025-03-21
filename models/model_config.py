@@ -10,7 +10,7 @@ PPO_DEFAULT_CONFIG = {
     "clip_range": 0.2,
     "clip_range_vf": 0.2,
     "ent_coef": 0.01,
-    "total_timesteps": 100000,
+    "total_timesteps": 10000,
 }
 
 test_episodes = 10

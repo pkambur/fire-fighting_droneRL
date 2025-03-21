@@ -24,9 +24,9 @@ class FireEnv(gym.Env):
         self.grid_size = e.GRID_SIZE
         self.cell_size = e.CELL_SIZE
         self.screen_size = self.grid_size * self.cell_size
-        self.base = e.BASE_POSITION
-        self.positions = [self.base, (1, 9), (2, 9)]  # Начальные позиции 3 агентов
         self.num_agents = 3
+        self.base = [(i, self.grid_size - 1) for i in range(self.num_agents)] #e.BASE_POSITION
+        self.positions = self.base.copy()  #[self.base, (1, 9), (2, 9)]  # Начальные позиции 3 агентов
         self.render_mode = render_mode
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
@@ -72,7 +72,7 @@ class FireEnv(gym.Env):
     def reset(self, seed: int = None, options: dict = None) -> tuple[np.ndarray, dict]:
         if seed is not None:
             np.random.seed(seed)
-        self.positions = [self.base, (1, 9), (2, 9)]
+        self.positions = self.base.copy() # [self.base, (1, 9), (2, 9)]
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
         self.fires, self.obstacles, self.trees = self.generate_positions()
@@ -84,14 +84,14 @@ class FireEnv(gym.Env):
 
     def generate_positions(self) -> tuple[set, set, set]:
         all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
-        all_positions -= {self.base, (1, 9), (2, 9)}
+        all_positions -= set(self.base) #{self.base, (1, 9), (2, 9)}
         fires = set(random.sample(list(all_positions), self.fire_count))
         all_positions -= fires
         obstacles = set(random.sample(list(all_positions), self.obstacle_count))
 
         all_fires_accessible = True
         for fire in fires:
-            if not self._check_availability(self.base, fire, obstacles):
+            if not self._check_availability(fire, obstacles):
                 all_fires_accessible = False
                 break
 
@@ -102,8 +102,8 @@ class FireEnv(gym.Env):
             trees = set(random.sample(list(all_positions), tree_count))
             return fires, obstacles, trees
 
-    def _check_availability(self, start, end, obstacles):
-        start_x, start_y = start
+    def _check_availability(self, end, obstacles):
+        start_x, start_y = 0, self.grid_size - 1
         end_x, end_y = end
         queue = deque([(start_x, start_y)])
         visited = [[0] * self.grid_size for _ in range(self.grid_size)]
@@ -257,7 +257,7 @@ class FireEnv(gym.Env):
         collision = False
         # if new_pos in [self.positions[i] for i in range(self.num_agents) if i != agent_idx]:
         # проще проверка и если позволить им сталкиваться на 1 шаге, так как вылет с одного места сейчас
-        if len(set(self.positions)) < self.num_agents and self.iteration_count != 1:
+        if len(set(self.positions)) < self.num_agents:# and self.iteration_count != 1:
             self.reward += e.CRASH_PENALTY
             logger.info(f'Agent {agent_idx} collision with another agent: {e.CRASH_PENALTY}')
             # self.positions[agent_idx] = new_pos
@@ -313,7 +313,6 @@ class FireEnv(gym.Env):
             self.screen.blit(self.images["fire"], (fire[0] * cell, fire[1] * cell))
         for obstacle in self.obstacles:
             self.screen.blit(self.images["obstacle"], (obstacle[0] * cell, obstacle[1] * cell))
-        self.screen.blit(self.images["base"], (self.base[0] * cell, self.base[1] * cell))
         for i in range(self.num_agents):
             self.screen.blit(self.images["agent"], (self.positions[i][0] * cell, self.positions[i][1] * cell))
         for tree in self.trees:
@@ -325,6 +324,8 @@ class FireEnv(gym.Env):
         for i in range(0, self.grid_size + houses_margin, 2):
             for j in range(self.grid_size, self.grid_size + houses_margin, 2):
                 self.screen.blit(self.images["houses"], (i * cell, j * cell))
+        for base in self.base:
+            self.screen.blit(self.images["base"], (base[0] * cell, base[1] * cell))
 
         # Правая панель
         size = self.screen_size + (houses_margin * cell)
