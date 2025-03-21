@@ -163,8 +163,8 @@ class FireEnv(gym.Env):
         self.info = {}
         self.wind.check()
 
-        for agent_idx, action in enumerate(actions):
-            self._take_action(agent_idx, action)
+        for i, action in enumerate(actions):
+            self._take_action(i, action)
 
         self.reward += e.STEP_PENALTY * self.num_agents
         logger.info(f'STEP_PENALTY = {e.STEP_PENALTY * self.num_agents}')
@@ -255,9 +255,8 @@ class FireEnv(gym.Env):
 
     def _check_collisions(self, new_pos: tuple, agent_idx: int) -> bool:
         collision = False
-        # if new_pos in [self.positions[i] for i in range(self.num_agents) if i != agent_idx]:
-        # проще проверка и если позволить им сталкиваться на 1 шаге, так как вылет с одного места сейчас
-        if len(set(self.positions)) < self.num_agents and self.iteration_count != 1:
+        if new_pos in [self.positions[i] for i in range(self.num_agents) if
+                       i != agent_idx] and self.iteration_count != 1:
             self.reward += e.CRASH_PENALTY
             logger.info(f'Agent {agent_idx} collision with another agent: {e.CRASH_PENALTY}')
             # self.positions[agent_idx] = new_pos
