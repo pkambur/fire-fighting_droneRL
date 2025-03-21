@@ -344,7 +344,7 @@ class FireEnv(gym.Env):
         y_offset += 40
 
         # Награды
-        draw_text(self.screen, f"Total Reward: {self.total_reward:.2f}", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, f"Reward: {self.total_reward:.2f}", font, BLACK, x_offset, y_offset)
         y_offset += 30
 
         # Состояние ветра
