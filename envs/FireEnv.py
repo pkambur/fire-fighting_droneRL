@@ -25,8 +25,8 @@ class FireEnv(gym.Env):
         self.cell_size = e.CELL_SIZE
         self.screen_size = self.grid_size * self.cell_size
         self.num_agents = 3
-        self.base = [(i, self.grid_size) for i in range(self.num_agents)] #e.BASE_POSITION
-        self.positions = self.base.copy()  #[self.base, (1, 9), (2, 9)]  # Начальные позиции 3 агентов
+        self.base = [(i, self.grid_size) for i in range(self.num_agents)]  # e.BASE_POSITION
+        self.positions = self.base.copy()  # [self.base, (1, 9), (2, 9)]  # Начальные позиции 3 агентов
         self.render_mode = render_mode
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
@@ -72,7 +72,7 @@ class FireEnv(gym.Env):
     def reset(self, seed: int = None, options: dict = None) -> tuple[np.ndarray, dict]:
         if seed is not None:
             np.random.seed(seed)
-        self.positions = self.base.copy() # [self.base, (1, 9), (2, 9)]
+        self.positions = self.base.copy()  # [self.base, (1, 9), (2, 9)]
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
         self.fires, self.obstacles, self.trees = self.generate_positions()
@@ -83,24 +83,31 @@ class FireEnv(gym.Env):
         return self._get_state(), self.info
 
     def generate_positions(self) -> tuple[set, set, set]:
-        all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
-        all_positions -= set(self.base) #{self.base, (1, 9), (2, 9)}
-        fires = set(random.sample(list(all_positions), self.fire_count))
-        all_positions -= fires
-        obstacles = set(random.sample(list(all_positions), self.obstacle_count))
-
-        all_fires_accessible = True
-        for fire in fires:
-            if not self._check_availability(fire, obstacles):
-                all_fires_accessible = False
-                break
-
         tree_count = int((self.grid_size ** 2 - self.fire_count - self.obstacle_count) * e.TREE_PERCENT)
 
-        if all_fires_accessible:
-            all_positions -= obstacles
-            trees = set(random.sample(list(all_positions), tree_count))
-            return fires, obstacles, trees
+        all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
+        all_positions -= set(self.base)  # {self.base, (1, 9), (2, 9)}
+        fires = set(random.sample(list(all_positions), self.fire_count))
+        all_positions -= fires
+
+        obstacles = self._generate_obstacles(fires, all_positions)
+        all_positions -= obstacles
+        trees = set(random.sample(list(all_positions), tree_count))
+        return fires, obstacles, trees
+
+    def _generate_obstacles(self, fires, all_positions):
+        attempt = 0
+        while attempt < 100:
+            obstacles = set(random.sample(list(all_positions), self.obstacle_count))
+            all_fires_accessible = True
+            for fire in fires:
+                if not self._check_availability(fire, obstacles):
+                    all_fires_accessible = False
+                    break
+            attempt += 1
+            if all_fires_accessible:
+                return obstacles
+        raise RuntimeError("Не удалось сгенерировать препятствия, при которых все пожары доступны.")
 
     def _check_availability(self, end, obstacles):
         start_x, start_y = 0, self.grid_size - 1

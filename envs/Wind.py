@@ -63,7 +63,7 @@ class Wind:
         for i in range(self.strength + 1):
             x = x_start + i * dx
             y = y_start + i * dy
-            if 0 <= x < self.env.grid_size and 0 <= y < self.env.grid_size:
+            if self.env.is_valid(x, y):
                 wind_cells.append((x, y))
             else:
                 break
