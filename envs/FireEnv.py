@@ -293,7 +293,6 @@ class FireEnv(gym.Env):
             self.wind.direction[1] if self.wind.direction else 0,  # y-направление (-1, 0, 1)
             self.wind.strength
         ]
-
         state = np.concatenate(
             state_parts +
             [distances_to_fires] +
@@ -340,32 +339,34 @@ class FireEnv(gym.Env):
 
         x_offset = self.screen_size + 5
         y_offset = 20
-        draw_text(self.screen, "Info", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, "Информация", font, BLACK, x_offset, y_offset)
         y_offset += 40
 
         # Основные показатели
-        draw_text(self.screen, f"Step: {self.iteration_count}", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, f"Шагов: {self.iteration_count}", font, BLACK, x_offset, y_offset)
         y_offset += 30
-        draw_text(self.screen, f"Fires: {len(self.fires)}", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, f"Очагов: {len(self.fires)}", font, BLACK, x_offset, y_offset)
         y_offset += 40
 
         # Награды
-        draw_text(self.screen, f"Reward: {self.total_reward:.2f}", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, f"Награда: {self.total_reward:.2f}", font, BLACK, x_offset, y_offset)
         y_offset += 30
 
         # Состояние ветра
-        wind_status = "Wind: " + ("Active" if self.wind.active else "Inactive")
+        wind_status = "Ветер " + ("дует" if self.wind.active else "не дует")
         draw_text(self.screen, wind_status, font, BLACK, x_offset, y_offset)
         y_offset += 30
         wind_dir = tuple(self.wind.direction) if self.wind.direction else (0, 0)
-        draw_text(self.screen, f"Dir: {wind_dir}", font, BLACK, x_offset, y_offset)
+        wind_dir_name = self.wind.DIRECTION_NAMES.get(wind_dir, "не ясно")
+
+        draw_text(self.screen, f"Направление: {wind_dir_name}", font, BLACK, x_offset, y_offset)
         y_offset += 30
-        draw_text(self.screen, f"Strength: {self.wind.strength if self.wind.strength else 0}", font, BLACK,
+        draw_text(self.screen, f"Сила: {self.wind.strength}", font, BLACK,
                   x_offset, y_offset)
         y_offset += 30
-        draw_text(self.screen, f"Wind On: {self.wind.steps_with_wind}", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, f"Ветер дует: {self.wind.steps_with_wind} шагов", font, BLACK, x_offset, y_offset)
         y_offset += 30
-        draw_text(self.screen, f"Next Wind: {self.wind.steps_from_last_wind}", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, f"След ветер: {self.wind.steps_from_last_wind}", font, BLACK, x_offset, y_offset)
 
         pygame.display.flip()
         pygame.time.delay(100)
