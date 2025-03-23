@@ -39,6 +39,8 @@ def test_model(scenario, model, fire_count, obstacle_count, render=True):
     for episode in range(1, test_episodes + 1):
         obs, _ = test_env.reset()
         total_reward = 0
+        if render and scenario == 2:
+            test_env.render_airplane()
 
         while True:
             actions, _ = model.predict(obs)
