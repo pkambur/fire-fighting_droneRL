@@ -11,9 +11,6 @@ MIN_BATTERY = 10
 BATTERY_THRESHOLD = 10
 BASE_RECHARGE = 50
 BASE_POSITION = (0, GRID_SIZE - 1)
-# привязать к кол-ву роботов и каждый в своей клетке стартует
-BASE_POSITIONS = [(0, GRID_SIZE - 1), (1, GRID_SIZE - 1), (2, GRID_SIZE - 1)]
-
 AGENT_VIEW = 5
 
 # Награды и штрафы

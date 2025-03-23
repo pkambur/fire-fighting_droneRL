@@ -1,5 +1,5 @@
 log_csv = "./logs/logs.csv"
 tensorboard_log_dir = "./logs/ppo_tensorboard/"
-model_name = "ppo_sceanrio_"
+model_name = "ppo_scenario_"
 best_model_path = "./data/best_model/"
 program_logs = "./logs/program.log"

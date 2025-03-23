@@ -41,7 +41,7 @@ def test_model(scenario, model, fire_count, obstacle_count, render=True):
         total_reward = 0
 
         while True:
-            actions, _ = model.predict(obs)  # Единое действие для всех агентов
+            actions, _ = model.predict(obs)
             obs, reward, terminated, truncated, info = test_env.step(actions)
             total_reward += reward
 

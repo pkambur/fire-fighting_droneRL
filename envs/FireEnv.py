@@ -5,7 +5,7 @@ import random
 
 from collections import deque
 from gymnasium.spaces import MultiDiscrete, Box
-from constants.colors import WHITE, GREEN, BLACK
+from constants.colors import WHITE, GREEN, BLACK, LIGHT_GRAY
 import envs as e
 from envs.Wind import Wind
 from render import BAR_WIDTH, FONT_SIZE
@@ -24,9 +24,9 @@ class FireEnv(gym.Env):
         self.grid_size = e.GRID_SIZE
         self.cell_size = e.CELL_SIZE
         self.screen_size = self.grid_size * self.cell_size
-        self.base = e.BASE_POSITION
-        self.positions = [self.base, (1, 9), (2, 9)]  # Начальные позиции 3 агентов
         self.num_agents = 3
+        self.base = [(i, self.grid_size) for i in range(self.num_agents)]  # e.BASE_POSITION
+        self.positions = self.base.copy()  # [self.base, (1, 9), (2, 9)]  # Начальные позиции 3 агентов
         self.render_mode = render_mode
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
@@ -72,7 +72,7 @@ class FireEnv(gym.Env):
     def reset(self, seed: int = None, options: dict = None) -> tuple[np.ndarray, dict]:
         if seed is not None:
             np.random.seed(seed)
-        self.positions = [self.base, (1, 9), (2, 9)]
+        self.positions = self.base.copy()  # [self.base, (1, 9), (2, 9)]
         self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
         self.fires, self.obstacles, self.trees = self.generate_positions()
@@ -83,27 +83,34 @@ class FireEnv(gym.Env):
         return self._get_state(), self.info
 
     def generate_positions(self) -> tuple[set, set, set]:
-        all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
-        all_positions -= {self.base, (1, 9), (2, 9)}
-        fires = set(random.sample(list(all_positions), self.fire_count))
-        all_positions -= fires
-        obstacles = set(random.sample(list(all_positions), self.obstacle_count))
-
-        all_fires_accessible = True
-        for fire in fires:
-            if not self._check_availability(self.base, fire, obstacles):
-                all_fires_accessible = False
-                break
-
         tree_count = int((self.grid_size ** 2 - self.fire_count - self.obstacle_count) * e.TREE_PERCENT)
 
-        if all_fires_accessible:
-            all_positions -= obstacles
-            trees = set(random.sample(list(all_positions), tree_count))
-            return fires, obstacles, trees
+        all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
+        all_positions -= set(self.base)  # {self.base, (1, 9), (2, 9)}
+        fires = set(random.sample(list(all_positions), self.fire_count))
+        all_positions -= fires
 
-    def _check_availability(self, start, end, obstacles):
-        start_x, start_y = start
+        obstacles = self._generate_obstacles(fires, all_positions)
+        all_positions -= obstacles
+        trees = set(random.sample(list(all_positions), tree_count))
+        return fires, obstacles, trees
+
+    def _generate_obstacles(self, fires, all_positions):
+        attempt = 0
+        while attempt < 100:
+            obstacles = set(random.sample(list(all_positions), self.obstacle_count))
+            all_fires_accessible = True
+            for fire in fires:
+                if not self._check_availability(fire, obstacles):
+                    all_fires_accessible = False
+                    break
+            attempt += 1
+            if all_fires_accessible:
+                return obstacles
+        raise RuntimeError("Не удалось сгенерировать препятствия, при которых все пожары доступны.")
+
+    def _check_availability(self, end, obstacles):
+        start_x, start_y = 0, self.grid_size - 1
         end_x, end_y = end
         queue = deque([(start_x, start_y)])
         visited = [[0] * self.grid_size for _ in range(self.grid_size)]
@@ -124,7 +131,7 @@ class FireEnv(gym.Env):
 
     def update_fire_distances(self):
         """
-        Update minimum distances to closed fire from every agent
+        Update minimum distances to closest fire from every agent
         """
         self.distances_to_fires = [
             min(abs(px - fx) + abs(py - fy) for fx, fy in self.fires)
@@ -132,9 +139,7 @@ class FireEnv(gym.Env):
 
     def get_local_view(self, agent_idx: int) -> np.ndarray:
         """
-        Возвращает локальное представление агента (5x5 клеток вокруг).
-        Returns:
-        np.array: сплющенный массив локального вида
+        Returns agent's local view (5x5 cells around)
         """
         pos_x, pos_y = self.positions[agent_idx]
         view_size = self.view // 2
@@ -163,11 +168,10 @@ class FireEnv(gym.Env):
         self.info = {}
         self.wind.check()
 
-        for i, action in enumerate(actions):
-            self._take_action(i, action)
-
-        self.reward += e.STEP_PENALTY * self.num_agents
-        logger.info(f'STEP_PENALTY = {e.STEP_PENALTY * self.num_agents}')
+        for agent_idx, action in enumerate(actions):
+            self._take_action(agent_idx, action)
+            self.reward += e.STEP_PENALTY
+            logger.info(f'STEP_PENALTY = {e.STEP_PENALTY}')
 
         self.update_fire_distances()
         state = self._get_state()
@@ -180,6 +184,7 @@ class FireEnv(gym.Env):
     def _take_action(self, agent_idx: int, action: int):
         if self.fires:
             old_distance = self.distances_to_fires[agent_idx]
+
         dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
         new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
 
@@ -224,13 +229,8 @@ class FireEnv(gym.Env):
         terminated, truncated = False, False
         if len(self.fires) == 0:
             terminated = True
-            # if self.iteration_count < self.max_steps // 2:
-            #     self.reward += e.FINAL_REWARD * 2
-            #     logger.info(f'FINAL_REWARD = {e.FINAL_REWARD * 2}')
-            # else:
             self.reward += e.FINAL_REWARD
             logger.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
-            # привязать к батарее
             step_saving_bonus = (self.max_steps - self.iteration_count) * 0.5
             self.reward += step_saving_bonus
             logger.info(f'Step saving bonus: +{step_saving_bonus}')
@@ -255,8 +255,7 @@ class FireEnv(gym.Env):
 
     def _check_collisions(self, new_pos: tuple, agent_idx: int) -> bool:
         collision = False
-        if new_pos in [self.positions[i] for i in range(self.num_agents) if
-                       i != agent_idx] and self.iteration_count != 1:
+        if new_pos in [self.positions[i] for i in range(self.num_agents) if i != agent_idx]:
             self.reward += e.CRASH_PENALTY
             logger.info(f'Agent {agent_idx} collision with another agent: {e.CRASH_PENALTY}')
             # self.positions[agent_idx] = new_pos
@@ -287,7 +286,6 @@ class FireEnv(gym.Env):
             self.wind.direction[1] if self.wind.direction else 0,  # y-направление (-1, 0, 1)
             self.wind.strength
         ]
-
         state = np.concatenate(
             state_parts +
             [distances_to_fires] +
@@ -312,53 +310,56 @@ class FireEnv(gym.Env):
             self.screen.blit(self.images["fire"], (fire[0] * cell, fire[1] * cell))
         for obstacle in self.obstacles:
             self.screen.blit(self.images["obstacle"], (obstacle[0] * cell, obstacle[1] * cell))
-        self.screen.blit(self.images["base"], (self.base[0] * cell, self.base[1] * cell))
-        for i in range(self.num_agents):
-            self.screen.blit(self.images["agent"], (self.positions[i][0] * cell, self.positions[i][1] * cell))
         for tree in self.trees:
             self.screen.blit(self.images["tree"], (tree[0] * cell, tree[1] * cell))
         if self.wind.cells is not None:
             for wind in self.wind.cells:
                 self.screen.blit(self.images["wind"], (wind[0] * cell, wind[1] * cell))
 
-        for i in range(0, self.grid_size + houses_margin, 2):
+        for i in range(1 + len(self.base), self.grid_size + houses_margin, 2):
             for j in range(self.grid_size, self.grid_size + houses_margin, 2):
                 self.screen.blit(self.images["houses"], (i * cell, j * cell))
+        for base in self.base:
+            self.screen.blit(self.images["base"], (base[0] * cell, base[1] * cell))
+        for i in range(self.num_agents):
+            self.screen.blit(self.images["agent"], (self.positions[i][0] * cell, self.positions[i][1] * cell))
 
         # Правая панель
         size = self.screen_size + (houses_margin * cell)
         font = pygame.font.Font(None, FONT_SIZE)
         status_info = pygame.Rect(self.screen_size, 0, BAR_WIDTH, size)
-        pygame.draw.rect(self.screen, WHITE, status_info)
+        pygame.draw.rect(self.screen, LIGHT_GRAY, status_info)
 
         x_offset = self.screen_size + 5
         y_offset = 20
-        draw_text(self.screen, "Info", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, "Информация", font, BLACK, x_offset, y_offset)
         y_offset += 40
 
         # Основные показатели
-        draw_text(self.screen, f"Step: {self.iteration_count}", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, f"Шагов: {self.iteration_count}", font, BLACK, x_offset, y_offset)
         y_offset += 30
-        draw_text(self.screen, f"Fires: {len(self.fires)}", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, f"Очагов: {len(self.fires)}", font, BLACK, x_offset, y_offset)
         y_offset += 40
 
         # Награды
-        draw_text(self.screen, f"Reward: {self.total_reward:.2f}", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, f"Награда: {self.total_reward:.2f}", font, BLACK, x_offset, y_offset)
         y_offset += 30
 
         # Состояние ветра
-        wind_status = "Wind: " + ("Active" if self.wind.active else "Inactive")
+        wind_status = "Ветер " + ("дует" if self.wind.active else "не дует")
         draw_text(self.screen, wind_status, font, BLACK, x_offset, y_offset)
         y_offset += 30
         wind_dir = tuple(self.wind.direction) if self.wind.direction else (0, 0)
-        draw_text(self.screen, f"Dir: {wind_dir}", font, BLACK, x_offset, y_offset)
+        wind_dir_name = self.wind.DIRECTION_NAMES.get(wind_dir, "не ясно")
+
+        draw_text(self.screen, f"Направление: {wind_dir_name}", font, BLACK, x_offset, y_offset)
         y_offset += 30
-        draw_text(self.screen, f"Strength: {self.wind.strength if self.wind.strength else 0}", font, BLACK,
+        draw_text(self.screen, f"Сила: {self.wind.strength}", font, BLACK,
                   x_offset, y_offset)
         y_offset += 30
-        draw_text(self.screen, f"Wind On: {self.wind.steps_with_wind}", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, f"Ветер дует: {self.wind.steps_with_wind} шагов", font, BLACK, x_offset, y_offset)
         y_offset += 30
-        draw_text(self.screen, f"Next Wind: {self.wind.steps_from_last_wind}", font, BLACK, x_offset, y_offset)
+        draw_text(self.screen, f"След ветер: {self.wind.steps_from_last_wind}", font, BLACK, x_offset, y_offset)
 
         pygame.display.flip()
         pygame.time.delay(100)
