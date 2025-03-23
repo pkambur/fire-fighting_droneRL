@@ -131,7 +131,7 @@ class FireEnv(gym.Env):
 
     def update_fire_distances(self):
         """
-        Update minimum distances to closed fire from every agent
+        Update minimum distances to closest fire from every agent
         """
         self.distances_to_fires = [
             min(abs(px - fx) + abs(py - fy) for fx, fy in self.fires)
@@ -139,9 +139,7 @@ class FireEnv(gym.Env):
 
     def get_local_view(self, agent_idx: int) -> np.ndarray:
         """
-        Возвращает локальное представление агента (5x5 клеток вокруг).
-        Returns:
-        np.array: сплющенный массив локального вида
+        Returns agent's local view (5x5 cells around)
         """
         pos_x, pos_y = self.positions[agent_idx]
         view_size = self.view // 2
@@ -172,9 +170,8 @@ class FireEnv(gym.Env):
 
         for agent_idx, action in enumerate(actions):
             self._take_action(agent_idx, action)
-
-        self.reward += e.STEP_PENALTY * self.num_agents
-        logger.info(f'STEP_PENALTY = {e.STEP_PENALTY * self.num_agents}')
+            self.reward += e.STEP_PENALTY
+            logger.info(f'STEP_PENALTY = {e.STEP_PENALTY}')
 
         self.update_fire_distances()
         state = self._get_state()
@@ -187,6 +184,7 @@ class FireEnv(gym.Env):
     def _take_action(self, agent_idx: int, action: int):
         if self.fires:
             old_distance = self.distances_to_fires[agent_idx]
+
         dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
         new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
 
@@ -231,13 +229,8 @@ class FireEnv(gym.Env):
         terminated, truncated = False, False
         if len(self.fires) == 0:
             terminated = True
-            # if self.iteration_count < self.max_steps // 2:
-            #     self.reward += e.FINAL_REWARD * 2
-            #     logger.info(f'FINAL_REWARD = {e.FINAL_REWARD * 2}')
-            # else:
             self.reward += e.FINAL_REWARD
             logger.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
-            # привязать к батарее
             step_saving_bonus = (self.max_steps - self.iteration_count) * 0.5
             self.reward += step_saving_bonus
             logger.info(f'Step saving bonus: +{step_saving_bonus}')

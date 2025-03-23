@@ -7,11 +7,13 @@ from stable_baselines3.common.callbacks import EvalCallback
 
 from envs.FireEnv import FireEnv
 from envs.FireEnv2 import FireEnv2
-from models.model_config import PPO_DEFAULT_CONFIG
+from models.model_config import PPO_DEFAULT_CONFIG, PPO_FINISH_EXTINGUISHING_CONFIG
 from utils.logging_files import tensorboard_log_dir, model_name, best_model_path
 
 
 def train_and_evaluate(scenario, fire_count, obstacle_count):
+    cfg = PPO_DEFAULT_CONFIG
+    # cfg = PPO_FINISH_EXTINGUISHING_CONFIG
 
     def make_env():
         if scenario == 1:
@@ -19,15 +21,15 @@ def train_and_evaluate(scenario, fire_count, obstacle_count):
         elif scenario == 2:
             env = FireEnv2(fire_count=fire_count, obstacle_count=obstacle_count, render_mode=None)
         else:
-            raise ValueError(f"Неизвестный сценарий: {scenario}. Допустимые значения: 1 или 2.")
+            raise ValueError(f"Неизвестный сценарий: {scenario}.\n"
+                             f" Допустимые значения: 1 или 2.")
         return env
 
-    vec_env = make_vec_env(make_env, n_envs=1)
+    vec_env = make_vec_env(make_env, n_envs=cfg["n_envs"])
     os.makedirs(tensorboard_log_dir, exist_ok=True)
-    cfg = PPO_DEFAULT_CONFIG
     model = PPO(
         policy=cfg["policy"],
-        env = vec_env,
+        env=vec_env,
         verbose=cfg["verbose"],
         learning_rate=cfg["learning_rate"],
         n_steps=cfg["n_steps"],
