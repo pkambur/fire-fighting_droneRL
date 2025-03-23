@@ -28,3 +28,6 @@ NEAR_FIRE_BONUS = 0.05  # бонус за приближение
 STAGNATION_THRESHOLD = 10  # порог застоя
 STAGNATION_PENALTY = -0.1  # штраф за застой
 FINAL_REWARD = 5  # награда за тушение всех пожаров
+
+NEW_STEP_REWARD = 0.05
+REPEAT_STEP_PENALTY = -0.05

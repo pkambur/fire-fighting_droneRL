@@ -1,335 +1,282 @@
-import gymnasium as gym
 import numpy as np
 import pygame
-import random
+import envs
+import constants.colors as colors
 
-from collections import deque
-from gymnasium.spaces import MultiDiscrete, Box
-from constants.colors import WHITE, GREEN, BLACK
-import envs as e
-from envs.Wind import Wind
-from render import BAR_WIDTH, FONT_SIZE
-from render.user_interface import show_input_window, draw_text
 from render.load_images import load_images
-from utils.logger import setup_logger
-
-logger = setup_logger()
+from gymnasium import Env, spaces
 
 
-class FireEnv2(gym.Env):
-    metadata = {"render_modes": ["human"], "render_fps": e.RENDER_FPS}
+class FireEnv2(Env):
 
-    def __init__(self, fire_count: int = None, obstacle_count: int = None, render_mode: str = None):
+    def __init__(self, fire_count: int = None, obstacle_count: int = None, render_mode: str = None) -> None:
         super().__init__()
-        self.grid_size = e.GRID_SIZE
-        self.cell_size = e.CELL_SIZE
+
+        self.cell_size = envs.CELL_SIZE
+        self.grid_size = envs.GRID_SIZE
         self.screen_size = self.grid_size * self.cell_size
-        self.base = e.BASE_POSITION
-        self.positions = [self.base, (1, 9), (2, 9)]  # Начальные позиции 3 агентов
-        self.num_agents = 3
+        self.screen = None
         self.render_mode = render_mode
-        self.steps_without_progress = [0] * self.num_agents
-        self.iteration_count = 0
-        self.total_reward = 0
-        self.reward = 0
-        self.max_steps = e.MAX_BATTERY
-        self.view = e.AGENT_VIEW
-        self.distances_to_fires = None
-        self.wind = Wind(self)
-
-        if fire_count is None or obstacle_count is None:
-            fire_count, obstacle_count = show_input_window()
-        self.fire_count = fire_count
-        self.obstacle_count = obstacle_count
         self.images = load_images(self.cell_size)
-        self.fires, self.obstacles = None, None
-        self.info = {}
 
-        # Пространство действий: единое для observer, 4 действия для каждого из 3 агентов
-        self.action_space = MultiDiscrete([4, 4, 4])
+        self.num_agents = 3
+        self.agent_positions = [(0, 18), (1, 19), (0, 19)]
+        self.base_agent_positions = self.agent_positions.copy()
+        self.num_goals = fire_count
+        self.num_obstacles = obstacle_count
+        self.max_steps = self._calculate_max_steps()
 
-        # Пространство наблюдений для observer
-        local_view_size = self.view ** 2
-        low = np.array(
-            [0] +
-            [0] * self.num_agents * 2 +
-            [0] * self.fire_count +
-            [0] * (local_view_size * self.num_agents),
-            dtype=np.float32
-        )
+        self.grid = None
+        self.fires_center_pos = None
+        self.fires = None
+        self.obstacles = None
+        self.trees = None
 
-        high = np.array(
-            [self.fire_count] +  # кол-во очагов
-            [self.grid_size] * self.num_agents * 2 +  # agent positions
-            [2 * self.grid_size] * self.fire_count +  # расстояние до очагов
-            [3] * (local_view_size * self.num_agents),  # что видят агенты
-            dtype=np.float32
-        )
-        self.observation_space = Box(low=low, high=high, dtype=np.float32)
-
-    def reset(self, seed: int = None, options: dict = None) -> tuple[np.ndarray, dict]:
-        if seed is not None:
-            np.random.seed(seed)
-        self.positions = [self.base, (1, 9), (2, 9)]
-        self.steps_without_progress = [0] * self.num_agents
         self.iteration_count = 0
-        self.fires, self.obstacles = self.generate_positions()
-        self.update_fire_distances()
-        self.total_reward = 0
-        self.wind.reset()
-        return self._get_state(), self.info
+        self.agent_steps_count = [0] * self.num_agents
+        self.active_goals = 0
+        self.visited_cells = set()
 
-    def generate_positions(self) -> tuple[set, set]:
-        all_positions = {(x, y) for x in range(self.grid_size) for y in range(self.grid_size)}
-        all_positions -= {self.base, (1, 9), (2, 9)}
-        fires = set(random.sample(list(all_positions), self.fire_count))
-        remaining_positions = all_positions - fires
-        obstacles = set(random.sample(list(remaining_positions), self.obstacle_count))
+        self.observation_space = spaces.Box(low = 0,
+                                            high = 1,
+                                            shape = (self.grid_size, self.grid_size, 4),
+                                            dtype = np.uint8)
 
-        all_fires_accessible = True
-        for fire in fires:
-            if not self._check_availability(self.base, fire, obstacles):
-                all_fires_accessible = False
-                break
+        self.action_space = spaces.MultiDiscrete([4, 4, 4])
 
-        if all_fires_accessible:
-            return fires, obstacles
 
-    def _check_availability(self, start, end, obstacles):
-        start_x, start_y = start
-        end_x, end_y = end
-        queue = deque([(start_x, start_y)])
-        visited = [[0] * self.grid_size for _ in range(self.grid_size)]
-        visited[start_x][start_y] = True
-        while queue:
-            x, y = queue.popleft()
-            if x == end_x and y == end_y:
-                return True
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                nx, ny = x + dx, y + dy
-                if self.is_valid(nx, ny) and not visited[nx][ny] and (nx, ny) not in obstacles:
-                    visited[nx][ny] = True
-                    queue.append((nx, ny))
-        return False
+    def reset(self, seed = None, options = None) -> tuple:
+        super().reset(seed = seed)
+        self._generate_grid()
+        self.iteration_count = 0
+        self.active_goals = len(self.fires)
+        self.agent_positions = self.base_agent_positions.copy()
+        self.agent_steps_count = [0] * self.num_agents
+        self.visited_cells.clear()
+        return self.grid.copy(), {}
 
-    def is_valid(self, x, y):
-        return 0 <= x < self.grid_size and 0 <= y < self.grid_size
 
-    def update_fire_distances(self):
-        """
-        Update minimum distances from every agent
-        """
-        # self.distances_to_fires = [min(abs(x - pos[0]) + abs(y - pos[1]) for pos in self.positions) for x, y in
-        #                            self.fires] if self.fires else []
+    def step(self, actions: np.ndarray) -> tuple:
+        reward = 0
+        terminated = False
+        truncated = False
+        info = {}
 
-        self.distances_to_fires = [
-            min(abs(px - fx) + abs(py - fy) for fx, fy in self.fires)
-            for px, py in self.positions] if self.fires else []
+        self.iteration_count = max(self.agent_steps_count)
 
-    def get_local_view(self, agent_idx: int) -> np.ndarray:
-        """
-        Возвращает локальное представление агента (5x5 клеток вокруг).
-        Returns:
-        np.array: сплющенный массив локального вида
-        """
-        pos_x, pos_y = self.positions[agent_idx]
-        view_size = self.view // 2
-        local_view = np.zeros((self.view, self.view), dtype=np.int32)
+        for agent_id, action in enumerate(actions):
+            x, y = self.agent_positions[agent_id]
+            prev_new_x, prev_new_y = x, y
 
-        for dx in range(-view_size, view_size + 1):
-            for dy in range(-view_size, view_size + 1):
-                x, y = pos_x + dx, pos_y + dy
-                if not self.is_valid(x, y):  # 0 <= x < self.grid_size and 0 <= y < self.grid_size):
-                    local_view[dx + view_size, dy + view_size] = 4  # вне поля
-                else:
-                    if (x, y) in self.fires:
-                        local_view[dx + view_size, dy + view_size] = 1  # Пожар
-                    elif (x, y) in self.obstacles:
-                        local_view[dx + view_size, dy + view_size] = 2  # Препятствие
-                    elif (x, y) == self.base:
-                        local_view[dx + view_size, dy + view_size] = 3  # База
-                    elif (x, y) in self.wind.cells:
-                        local_view[dx + view_size, dy + view_size] = 5  # База
-        return local_view.flatten()
+            if action == 0:
+                prev_new_y -= 1
+            elif action == 1:
+                prev_new_y += 1
+            elif action == 2:
+                prev_new_x -= 1
+            elif action == 3:
+                prev_new_x += 1
 
-    def step(self, actions: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
-        self.iteration_count += 1
-        logger.info(f'Step {self.iteration_count}')
-        self.reward = 0
-        self.info = {}
+            new_x, new_y = np.clip((prev_new_x, prev_new_y),
+                                   0, (self.grid_size - 1))
 
-        # Применяем действия ко всем агентам одновременно
-        for i, action in enumerate(actions):
-            self._take_action(i, action)
+            self.grid[x, y, 2] = 0
+            self.agent_positions[agent_id] = (new_x, new_y)
+            self.grid[new_x, new_y, 2] = 1
+            self.agent_steps_count[agent_id] += 1
 
-        self.reward += e.STEP_PENALTY * self.num_agents
-        logger.info(f'STEP_PENALTY = {e.STEP_PENALTY * self.num_agents}')
-
-        self.update_fire_distances()
-        state = self._get_state()
-
-        # расчет появления ветра должен быть привязан на макс кол-во шагов
-        if self.wind.steps_from_last_wind >= random.randint(30, 50):
-            self.wind.wind_activation()
-        elif self.wind.steps_with_wind == self.wind.duration:
-            self.wind.active = False
-
-        terminated, truncated = self._check_termination()
-        self.total_reward += self.reward
-
-        return state, self.reward, terminated, truncated, self.info
-
-    def _take_action(self, agent_idx: int, action: int):
-        if self.fires:
-            old_distance = self.distances_to_fires[agent_idx]
-        dx, dy = [(0, -1), (0, 1), (-1, 0), (1, 0)][action]
-        new_pos = (self.positions[agent_idx][0] + dx, self.positions[agent_idx][1] + dy)
-
-        if self.wind.active:
-            self.wind.steps_with_wind += 1
-            self.wind.steps_from_last_wind = 0
-        else:
-            self.wind.steps_with_wind = 0
-            self.wind.steps_from_last_wind += 1
-            self.wind.cells = []
-
-        if new_pos in self.wind.cells:
-            new_pos = self._wind_influence(new_pos)
-            self.positions[agent_idx] = new_pos
-            self.steps_without_progress[agent_idx] += 1
-        else:
-            if self._check_collisions(new_pos, agent_idx):
-                self.steps_without_progress[agent_idx] += 1
-                self.info["Collision"] = True
-            elif new_pos in self.fires:
-                self.fires.remove(new_pos)
-                self.steps_without_progress[agent_idx] = 0
-                self.positions[agent_idx] = new_pos
-                self.reward += e.FIRE_REWARD
-                if self.iteration_count < self.max_steps // 2:
-                    self.reward += e.FIRE_REWARD * 0.5
-                    logger.info(f'Agent {agent_idx} fast fire extinguish bonus: +{e.FIRE_REWARD * 0.5}')
-                self.info["The goal has been achieved"] = True
-                self.positions[agent_idx] = new_pos
-                logger.info(f'Agent {agent_idx} extinguished fire at {new_pos}: {e.FIRE_REWARD}')
+            if (new_x, new_y) not in self.visited_cells:
+                reward += self._exploration_bonus()
+                self.visited_cells.add((new_x, new_y))
             else:
-                self.steps_without_progress[agent_idx] += 1
-                self.positions[agent_idx] = new_pos
-                # нужно проверить работает ли
-                self.update_fire_distances()
-                if self.fires:
-                    new_distance = self.distances_to_fires[agent_idx]
-                    if new_distance < old_distance:
-                        self.reward += e.NEAR_FIRE_BONUS
-                        logger.info(f'Agent {agent_idx} moved closer to fire: +{e.NEAR_FIRE_BONUS}')
+                reward += self._revisit_penalty()
 
-        if self.steps_without_progress[agent_idx] >= e.STAGNATION_THRESHOLD:
-            self.reward += e.STAGNATION_PENALTY
-            logger.info(f'Stagnation penalty for agent {agent_idx}: {e.STAGNATION_PENALTY}')
+            if (new_x, new_y) in self.obstacles:
+                reward += envs.OBSTACLE_PENALTY
+                info["Collision"] = True
 
-        logger.info(f'Agent {agent_idx} Position = {self.positions[agent_idx]}')
+            if (new_x, new_y) in self.agent_positions:
+                reward += envs.CRASH_PENALTY
+                info["Collision"] = True
 
-    def _check_termination(self):
-        terminated, truncated = False, False
-        if len(self.fires) == 0:
+            goal_reward = self._check_agent_has_achieved_goal(agent_id)
+            if goal_reward != 0.0:
+                reward += goal_reward
+                info["The goal has been achieved"] = True
+
+        if self.active_goals == 0:
+            reward += envs.FINAL_REWARD
+            info["All goals have been achieved"] = True
             terminated = True
-            if self.iteration_count < self.max_steps // 2:
-                self.reward += e.FINAL_REWARD * 2
-                logger.info(f'FINAL_REWARD = {e.FINAL_REWARD * 2}')
-            else:
-                self.reward += e.FINAL_REWARD
-                logger.info(f'FINAL_REWARD = {e.FINAL_REWARD}')
-            # привязать к батарее
-            step_saving_bonus = (self.max_steps - self.iteration_count) * 0.5
-            self.reward += step_saving_bonus
-            logger.info(f'Step saving bonus: +{step_saving_bonus}')
-        elif self.iteration_count >= self.max_steps:
-            self.reward -= e.FINAL_REWARD
-            logger.info(f'MAX_STEPS DONE = {-e.FINAL_REWARD}')
+
+        if self.iteration_count >= self.max_steps:
+            info["Exceeded the maximum possible number of steps"] = True
             truncated = True
-        return terminated, truncated
 
-    def _wind_influence(self, pos: tuple[int, int]) -> tuple[int, int]:
-        # разделены новые и старые, чтобы проверить в логах работу
-        x, y = pos
-        new_x, new_y = pos
-        if (x, y) in self.wind.cells:
-            new_x = x + (self.wind.strength + 1) * self.wind.direction[0]
-            new_y = y + (self.wind.strength + 1) * self.wind.direction[1]
-            # чтобы не вылетал за границы от ветра
-            new_x = np.clip(new_x, 0, self.grid_size - 1)
-            new_y = np.clip(new_y, 0, self.grid_size - 1)
-            self.reward += e.WIND_PENALTY
-            logger.info(f'wind penalty {e.WIND_PENALTY} in {x, y} to {new_x, new_y}')
-        return new_x, new_y
+        return self.grid.copy(), reward, terminated, truncated, info
 
-    def _check_collisions(self, new_pos: tuple, agent_idx: int) -> bool:
-        collision = False
-        if new_pos in [self.positions[i] for i in range(self.num_agents) if i != agent_idx]:
-            self.reward += e.CRASH_PENALTY
-            logger.info(f'Agent {agent_idx} collision with another agent: {e.CRASH_PENALTY}')
-            self.positions[agent_idx] = new_pos
-            collision = True
-        elif not (0 <= new_pos[0] < self.grid_size and 0 <= new_pos[1] < self.grid_size):
-            self.reward += e.OUT_OF_BOUNDS_PENALTY
-            logger.info(f'Agent {agent_idx} out of bounds: {e.OUT_OF_BOUNDS_PENALTY}')
-            collision = True
-        elif new_pos in self.obstacles:
-            self.reward += e.OBSTACLE_PENALTY
-            logger.info(f'Agent {agent_idx} hit obstacle: {e.OBSTACLE_PENALTY}')
-            collision = True
-            self.positions[agent_idx] = new_pos
-        return collision
-
-    def _get_state(self) -> np.ndarray:
-        state_parts = [
-            np.array([len(self.fires)], dtype=np.float32),
-            (np.concatenate(self.positions))
-        ]
-        distances_to_fires = (self.distances_to_fires +
-                              [0] * (self.fire_count - len(self.distances_to_fires)))
-
-        state = np.concatenate(
-            state_parts +
-            [distances_to_fires] +
-            [self.get_local_view(i) for i in range(self.num_agents)])
-
-        return state
 
     def render(self) -> None:
+        houses_margin = int(self.grid_size * 0.1)
         if self.render_mode != "human":
             return
-        if not hasattr(self, 'screen'):
+        if self.screen is None:
             pygame.init()
-            self.screen = pygame.display.set_mode((self.screen_size + BAR_WIDTH, self.screen_size))
-            pygame.display.set_caption("Fire Environment")
-        self.screen.fill(GREEN)
+            size = self.screen_size + (houses_margin * self.cell_size)
+            self.screen = pygame.display.set_mode((self.screen_size, size))
+            pygame.display.set_caption("Fire Fighter")
 
-        cell = self.cell_size
+        self.screen.fill(colors.GREEN)
+
+        for tree in self.trees:
+            self.screen.blit(self.images["tree"], (tree[0] * self.cell_size,
+                                                        tree[1] * self.cell_size))
+
+        for base in self.base_agent_positions:
+            self.screen.blit(self.images["base"], (base[0] * self.cell_size,
+                                                        base[1] * self.cell_size))
+
+        for agent in self.agent_positions:
+            self.screen.blit(self.images["agent"], (agent[0] * self.cell_size,
+                                                         agent[1] * self.cell_size))
+
+        for obs in self.obstacles:
+            self.screen.blit(self.images["obstacle"], (obs[0] * self.cell_size,
+                                                            obs[1] * self.cell_size))
+
+        self.screen.blit(self.images["burned"], (self.fires_center_pos[0] * self.cell_size,
+                                                      self.fires_center_pos[1] * self.cell_size))
+
         for fire in self.fires:
-            self.screen.blit(self.images["fire"], (fire[0] * cell, fire[1] * cell))
-        for obstacle in self.obstacles:
-            self.screen.blit(self.images["obstacle"], (obstacle[0] * cell, obstacle[1] * cell))
-        self.screen.blit(self.images["base"], (self.base[0] * cell, self.base[1] * cell))
-        for i in range(self.num_agents):
-            self.screen.blit(self.images["agent"], (self.positions[i][0] * cell, self.positions[i][1] * cell))
+            self.screen.blit(self.images["fire"], (fire[0] * self.cell_size,
+                                                        fire[1] * self.cell_size))
 
-        if self.wind.cells is not None:
-            for wind in self.wind.cells:
-                self.screen.blit(self.images["wind"], (wind[0] * cell, wind[1] * cell))
+        for i in range(0, self.grid_size + houses_margin, 2):
+            for j in range(self.grid_size, self.grid_size + houses_margin, 2):
+                self.screen.blit(self.images["houses"], (i * self.cell_size, j * self.cell_size))
 
-        font = pygame.font.Font(None, FONT_SIZE)
-        status_info = pygame.Rect(self.screen_size, 0, BAR_WIDTH,
-                                  self.screen_size)
-        pygame.draw.rect(self.screen, WHITE, status_info)
-        draw_text(self.screen, "Game info", font, BLACK, self.screen_size, 20)
-        draw_text(self.screen, f"Step {self.iteration_count}", font, BLACK, self.screen_size, 60)
         pygame.display.flip()
         pygame.time.delay(100)
 
-    def close(self) -> None:
-        if self.render_mode == "human" and hasattr(self, 'screen'):
-            from render.user_interface import show_summary_window
-            show_summary_window(self.fire_count, self.fire_count - len(self.fires),
-                                self.obstacle_count, self.iteration_count, self.total_reward)
-            del self.screen
+
+    def stop(self) -> None:
+        if self.screen is not None:
+            pygame.quit()
+
+
+    def _calculate_max_steps(self) -> int:
+        """The maximum number of steps of the agent is approximately taken in accordance
+           with the battery consumption of the drone. The coefficient 1.6 is obtained under
+           the following assumptions:
+           - a 10x10 grid of cells,
+           - in 1 step, the battery charge is reduced by 0.5 %,
+           - drone should have 20 % of its battery charge remaining when returning to base."""
+        return int((self.grid_size ** 2) * 1.6)
+
+
+    def _exploration_bonus(self) -> float:
+        """Reward for visiting new cells. Increases in proportion to the discovery of new goals"""
+        base_bonus = envs.NEW_STEP_REWARD
+        if len(self.fires) == 0:
+            return base_bonus
+        goal_ratio = self.active_goals / len(self.fires)
+        return base_bonus * (1 + goal_ratio)
+
+
+    def _revisit_penalty(self) -> float:
+        """Penalty for repeated visits to the cells. Decreases in proportion to the discovery
+           of new goals"""
+        base_penalty = envs.REPEAT_STEP_PENALTY
+        if len(self.fires) == 0:
+            return base_penalty
+        goal_ratio = self.active_goals / len(self.fires)
+        return base_penalty * (1 - goal_ratio)
+
+
+    def _generate_grid(self) -> None:
+        """Generates an environment with an agent and a random location of the central cell of
+           goals, goals and obstacles"""
+        self.grid = np.zeros((self.grid_size, self.grid_size, 4), dtype = np.uint8)
+
+        for _, (agent_x, agent_y) in enumerate(self.base_agent_positions):
+            self.grid[agent_x, agent_y, 2] = 1
+
+        fires_center_x, fires_center_y = self._generate_fires_center_position()
+        self.fires_center_pos = (fires_center_x, fires_center_y)
+        self.grid[fires_center_x, fires_center_y, 3] = 1
+
+        self.fires = self._generate_goals(fires_center_x, fires_center_y)
+        for (goal_x, goal_y) in self.fires:
+            self.grid[goal_x, goal_y, 1] = 1
+
+        available_cells = [
+            (i, j) for i in range(self.grid_size)
+            for j in range(self.grid_size)
+            if (i, j) not in self.fires and
+               (i, j) != self.fires_center_pos and
+               (i, j) not in set(self.base_agent_positions)
+        ]
+
+        selected_obstacles = self.np_random.choice(available_cells,
+                                                   size = self.num_obstacles, replace = False)
+        self.obstacles = set(map(tuple, selected_obstacles))
+        for (obs_x, obs_y) in self.obstacles:
+            self.grid[obs_x, obs_y, 0] = 1
+
+        tree_count = int((self.grid_size ** 2 - self.num_goals - self.num_obstacles
+                          - len(self.base_agent_positions)) * envs.TREE_PERCENT)
+        available_cells_trees = [cell for cell in available_cells if cell
+                                     not in self.obstacles]
+        selected_trees = self.np_random.choice(available_cells_trees,
+                                               size = tree_count, replace = False)
+
+        self.trees = set(map(tuple, selected_trees))
+        for (tree_x, tree_y) in self.trees:
+            self.grid[tree_x, tree_y, 3] = 1
+
+
+    def _get_random_position(self) -> tuple:
+        return (self.np_random.integers(0, self.grid_size),
+                self.np_random.integers(0, self.grid_size))
+
+
+    def _generate_fires_center_position(self) -> tuple:
+        """Generates coordinates of the position of the fires central cell, relative to which
+           the fires will be located"""
+        return (self.np_random.integers(1, (self.grid_size - 1)),
+                self.np_random.integers(1, (self.grid_size - 1)))
+
+
+    def _generate_goals(self, center_x: int, center_y: int) -> set[tuple]:
+        """Generates coordinates of goals from four sides relative to the goals central cell"""
+        goals = set()
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            new_x = center_x + dx
+            new_y = center_y + dy
+            goals.add((new_x, new_y))
+        return goals
+
+
+    def _check_agent_has_achieved_goal(self, agent_id: int) -> float:
+        """The method checks whether the agent has reached the goal. If the agent has reached
+           the goal, he returns to the base to replenish the fire extinguishing agent.
+           The return-to-base function is embedded in the drone's software. As an assumption,
+           we assume that the drone's position becomes equal to the base's position. At the same
+           time, the number of steps taken increases. The coefficient of 0.07 was obtained under
+           the following conditions:
+           - 10x10 grid of cells,
+           - base position (2, 2),
+           - 8 arbitrary grid cells were taken as goals, the number of steps from each goal
+           to the base by the shortest path without obstacles was calculated, and the average
+           value of the steps was taken."""
+        if self.agent_positions[agent_id] in self.fires:
+            self.grid[self.agent_positions[agent_id][0], self.agent_positions[agent_id][1], 1] = 0
+            self.fires.remove(self.agent_positions[agent_id])
+            self.active_goals -= 1
+
+            self.agent_positions[agent_id] = self.base_agent_positions[agent_id]
+            self.agent_steps_count[agent_id] += int((self.grid_size ** 2) * 0.07)
+
+            return envs.FIRE_REWARD
+        else:
+            return 0.0

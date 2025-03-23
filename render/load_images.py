@@ -13,6 +13,7 @@ def load_images(cell_size) -> dict[str, Surface | SurfaceType]:
             "houses": pygame.transform.scale(pygame.image.load("data/images/houses.jpg"),
                                              (cell_size * 2, cell_size * 2)),
             "tree": pygame.transform.scale(pygame.image.load("data/images/tree.png"), (cell_size, cell_size)),
+            "burned": pygame.transform.scale(pygame.image.load("data/images/burned.png"), (cell_size, cell_size)),
         }
         return images
     except FileNotFoundError as e:
