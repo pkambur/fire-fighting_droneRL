@@ -1,7 +1,10 @@
+import random
+
 import numpy as np
 import pygame
 import envs
 import constants.colors as colors
+from envs.Fire import Fire
 
 from render.load_images import load_images
 from gymnasium import Env, spaces
@@ -26,8 +29,8 @@ class FireEnv2(Env):
         self.num_obstacles = obstacle_count
         self.max_steps = self._calculate_max_steps()
 
+        self.fire = Fire(self)
         self.grid = None
-        self.fires_center_pos = None
         self.fires = None
         self.obstacles = None
         self.trees = None
@@ -37,16 +40,17 @@ class FireEnv2(Env):
         self.active_goals = 0
         self.visited_cells = set()
 
-        self.observation_space = spaces.Box(low = 0,
-                                            high = 1,
-                                            shape = (self.grid_size, self.grid_size, 4),
-                                            dtype = np.uint8)
+        self.observation_space = spaces.Box(low=0,
+                                            high=1,
+                                            shape=(self.grid_size, self.grid_size, 4),
+                                            dtype=np.uint8)
 
         self.action_space = spaces.MultiDiscrete([4, 4, 4])
 
-
-    def reset(self, seed = None, options = None) -> tuple:
-        super().reset(seed = seed)
+    def reset(self, seed=None, options=None) -> tuple:
+        super().reset(seed=seed)
+        self.fire.reset()
+        self.fires = self.fire.goals
         self._generate_grid()
         self.iteration_count = 0
         self.active_goals = len(self.fires)
@@ -54,7 +58,6 @@ class FireEnv2(Env):
         self.agent_steps_count = [0] * self.num_agents
         self.visited_cells.clear()
         return self.grid.copy(), {}
-
 
     def step(self, actions: np.ndarray) -> tuple:
         reward = 0
@@ -115,7 +118,6 @@ class FireEnv2(Env):
 
         return self.grid.copy(), reward, terminated, truncated, info
 
-
     def render(self) -> None:
         houses_margin = int(self.grid_size * 0.1)
         if self.render_mode != "human":
@@ -130,26 +132,26 @@ class FireEnv2(Env):
 
         for tree in self.trees:
             self.screen.blit(self.images["tree"], (tree[0] * self.cell_size,
-                                                        tree[1] * self.cell_size))
+                                                   tree[1] * self.cell_size))
 
         for base in self.base_agent_positions:
             self.screen.blit(self.images["base"], (base[0] * self.cell_size,
-                                                        base[1] * self.cell_size))
+                                                   base[1] * self.cell_size))
 
         for agent in self.agent_positions:
             self.screen.blit(self.images["agent"], (agent[0] * self.cell_size,
-                                                         agent[1] * self.cell_size))
+                                                    agent[1] * self.cell_size))
 
         for obs in self.obstacles:
             self.screen.blit(self.images["obstacle"], (obs[0] * self.cell_size,
-                                                            obs[1] * self.cell_size))
+                                                       obs[1] * self.cell_size))
 
-        self.screen.blit(self.images["burned"], (self.fires_center_pos[0] * self.cell_size,
-                                                      self.fires_center_pos[1] * self.cell_size))
+        self.screen.blit(self.images["burned"], (self.fire.center_x * self.cell_size,
+                                                 self.fire.center_y * self.cell_size))
 
         for fire in self.fires:
             self.screen.blit(self.images["fire"], (fire[0] * self.cell_size,
-                                                        fire[1] * self.cell_size))
+                                                   fire[1] * self.cell_size))
 
         for i in range(0, self.grid_size + houses_margin, 2):
             for j in range(self.grid_size, self.grid_size + houses_margin, 2):
@@ -158,11 +160,44 @@ class FireEnv2(Env):
         pygame.display.flip()
         pygame.time.delay(100)
 
+    def render_airplane(self):
+        houses_margin = int(self.grid_size * 0.1)
+        if self.render_mode != "human":
+            return
+        if self.screen is None:
+            pygame.init()
+            size = self.screen_size + (houses_margin * self.cell_size)
+            self.screen = pygame.display.set_mode((self.screen_size, size))
+            pygame.display.set_caption("Fire Fighter")
+
+        while len(self.fire.fire_cells) != len(self.fires):
+            self.screen.fill(colors.GREEN)
+            for tree in self.trees:
+                self.screen.blit(self.images["tree"], (tree[0] * self.cell_size,
+                                                       tree[1] * self.cell_size))
+            for base in self.base_agent_positions:
+                self.screen.blit(self.images["base"], (base[0] * self.cell_size,
+                                                       base[1] * self.cell_size))
+            for obs in self.obstacles:
+                self.screen.blit(self.images["obstacle"], (obs[0] * self.cell_size,
+                                                           obs[1] * self.cell_size))
+            for i in range(0, self.grid_size + houses_margin, 2):
+                for j in range(self.grid_size, self.grid_size + houses_margin, 2):
+                    self.screen.blit(self.images["houses"], (i * self.cell_size, j * self.cell_size))
+            for fire in self.fire.fire_cells:
+                self.screen.blit(self.images["fire"], (fire[0] * self.cell_size,
+                                                       fire[1] * self.cell_size))
+            aircraft_position = random.choice(list(self.fire.fire_cells))
+            self.screen.blit(self.images["aircraft"], (aircraft_position[0] * self.cell_size,
+                                                       aircraft_position[1] * self.cell_size))
+            if aircraft_position not in self.fires:
+                self.fire.fire_cells -= {aircraft_position}
+            pygame.display.flip()
+            pygame.time.delay(300)
 
     def stop(self) -> None:
         if self.screen is not None:
             pygame.quit()
-
 
     def _calculate_max_steps(self) -> int:
         """The maximum number of steps of the agent is approximately taken in accordance
@@ -173,7 +208,6 @@ class FireEnv2(Env):
            - drone should have 20 % of its battery charge remaining when returning to base."""
         return int((self.grid_size ** 2) * 1.6)
 
-
     def _exploration_bonus(self) -> float:
         """Reward for visiting new cells. Increases in proportion to the discovery of new goals"""
         base_bonus = envs.NEW_STEP_REWARD
@@ -181,7 +215,6 @@ class FireEnv2(Env):
             return base_bonus
         goal_ratio = self.active_goals / len(self.fires)
         return base_bonus * (1 + goal_ratio)
-
 
     def _revisit_penalty(self) -> float:
         """Penalty for repeated visits to the cells. Decreases in proportion to the discovery
@@ -192,20 +225,15 @@ class FireEnv2(Env):
         goal_ratio = self.active_goals / len(self.fires)
         return base_penalty * (1 - goal_ratio)
 
-
     def _generate_grid(self) -> None:
         """Generates an environment with an agent and a random location of the central cell of
            goals, goals and obstacles"""
-        self.grid = np.zeros((self.grid_size, self.grid_size, 4), dtype = np.uint8)
+        self.grid = np.zeros((self.grid_size, self.grid_size, 4), dtype=np.uint8)
 
         for _, (agent_x, agent_y) in enumerate(self.base_agent_positions):
             self.grid[agent_x, agent_y, 2] = 1
 
-        fires_center_x, fires_center_y = self._generate_fires_center_position()
-        self.fires_center_pos = (fires_center_x, fires_center_y)
-        self.grid[fires_center_x, fires_center_y, 3] = 1
-
-        self.fires = self._generate_goals(fires_center_x, fires_center_y)
+        self.grid[self.fire.center_x, self.fire.center_y, 3] = 1
         for (goal_x, goal_y) in self.fires:
             self.grid[goal_x, goal_y, 1] = 1
 
@@ -213,12 +241,12 @@ class FireEnv2(Env):
             (i, j) for i in range(self.grid_size)
             for j in range(self.grid_size)
             if (i, j) not in self.fires and
-               (i, j) != self.fires_center_pos and
+               (i, j) != (self.fire.center_x, self.fire.center_y) and
                (i, j) not in set(self.base_agent_positions)
         ]
 
         selected_obstacles = self.np_random.choice(available_cells,
-                                                   size = self.num_obstacles, replace = False)
+                                                   size=self.num_obstacles, replace=False)
         self.obstacles = set(map(tuple, selected_obstacles))
         for (obs_x, obs_y) in self.obstacles:
             self.grid[obs_x, obs_y, 0] = 1
@@ -226,36 +254,13 @@ class FireEnv2(Env):
         tree_count = int((self.grid_size ** 2 - self.num_goals - self.num_obstacles
                           - len(self.base_agent_positions)) * envs.TREE_PERCENT)
         available_cells_trees = [cell for cell in available_cells if cell
-                                     not in self.obstacles]
+                                 not in self.obstacles]
         selected_trees = self.np_random.choice(available_cells_trees,
-                                               size = tree_count, replace = False)
+                                               size=tree_count, replace=False)
 
         self.trees = set(map(tuple, selected_trees))
         for (tree_x, tree_y) in self.trees:
             self.grid[tree_x, tree_y, 3] = 1
-
-
-    def _get_random_position(self) -> tuple:
-        return (self.np_random.integers(0, self.grid_size),
-                self.np_random.integers(0, self.grid_size))
-
-
-    def _generate_fires_center_position(self) -> tuple:
-        """Generates coordinates of the position of the fires central cell, relative to which
-           the fires will be located"""
-        return (self.np_random.integers(1, (self.grid_size - 1)),
-                self.np_random.integers(1, (self.grid_size - 1)))
-
-
-    def _generate_goals(self, center_x: int, center_y: int) -> set[tuple]:
-        """Generates coordinates of goals from four sides relative to the goals central cell"""
-        goals = set()
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            new_x = center_x + dx
-            new_y = center_y + dy
-            goals.add((new_x, new_y))
-        return goals
-
 
     def _check_agent_has_achieved_goal(self, agent_id: int) -> float:
         """The method checks whether the agent has reached the goal. If the agent has reached
