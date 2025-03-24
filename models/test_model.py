@@ -29,6 +29,7 @@ def test_model(scenario, model, fire_count, obstacle_count, render=True):
         "collision_count": 0,
         "achieved_goals": 0
     }
+
     if scenario == 1:
         test_env = FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode="human")
     elif scenario == 2:
@@ -82,12 +83,15 @@ def test_model(scenario, model, fire_count, obstacle_count, render=True):
 
     success_rate = (metrics["successful_attempts"] / test_episodes) * 100
     avg_reward = metrics["total_reward"] / test_episodes
+    avg_steps = metrics["total_steps"] / test_episodes
     step_efficiency = (metrics["total_steps"] / metrics["achieved_goals"]) if metrics["achieved_goals"] else 0
     collision_rate = metrics["collision_count"] / test_episodes
+
     print(f"""
     Evaluation results:
     Success Rate: {success_rate:.1f} %
     Average Reward: {avg_reward:.2f}
+    Average Steps: {avg_steps:.2f} in episode
     Step Efficiency: {step_efficiency:.1f} steps/goal
     Collision Rate: {collision_rate:.1f} in episode
     """)
