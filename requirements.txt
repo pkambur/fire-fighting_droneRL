@@ -4,3 +4,4 @@ stable-baselines3==2.5.0
 numpy==2.2.3
 tensorboard==2.19.0
 matplotlib==3.10.0
+optuna==4.2.1
