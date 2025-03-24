@@ -1,10 +1,11 @@
+import models.model_config as config
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import CallbackList
 
 from envs.FireEnv import FireEnv
 from envs.FireEnv2 import FireEnv2
-from models.model_config import PPO_DEFAULT_CONFIG
 from mongo.mongo_integration import MongoDBLoggerCallback
 from utils.logging_files import tensorboard_log_dir, model_name
 
@@ -13,19 +14,26 @@ def train_and_evaluate_with_mongo(scenario, fire_count, obstacle_count, experime
     """
     Обучает модель с логированием в MongoDB.
     """
-
+    cfg = {}
     def make_env():
+        nonlocal cfg
         if scenario == 1:
-            env = FireEnv(fire_count=fire_count, obstacle_count=obstacle_count, render_mode=None)
+            env = FireEnv(fire_count = fire_count,
+                          obstacle_count = obstacle_count,
+                          render_mode = None)
+            cfg = config.ppo_config["PPO_SCENARIO1_CONFIG"]
         elif scenario == 2:
-            env = FireEnv2(fire_count=fire_count, obstacle_count=obstacle_count, render_mode=None)
+            env = FireEnv2(fire_count = fire_count,
+                           obstacle_count = obstacle_count,
+                           render_mode = None)
+            cfg = config.ppo_config["PPO_SCENARIO2_CONFIG"]
         else:
             raise ValueError(f"Неизвестный сценарий: {scenario}. Допустимые значения: 1 или 2.")
         return env
 
-    vec_env = make_vec_env(make_env, n_envs=1)
+    train_env = make_env()
+    vec_env = make_vec_env(lambda: train_env, n_envs = cfg["n_envs"])
 
-    cfg = PPO_DEFAULT_CONFIG
     model = PPO(
         policy=cfg["policy"],
         env=vec_env,
