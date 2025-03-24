@@ -5,6 +5,7 @@ import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 
+
 class MongoDBLoggerCallback(BaseCallback):
     """
     Callback для логирования метрик обучения модели RL в MongoDB.
@@ -164,7 +165,7 @@ class MongoDBLoggerCallback(BaseCallback):
         except Exception as e:
             print(f"MongoDB Logger: Ошибка при логировании эпизода: {str(e)}")
     
-    def _on_training_end(self):
+    def on_training_end(self):
         """Вызывается в конце обучения."""
         try:
             # Вычисляем агрегированные метрики

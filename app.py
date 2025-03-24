@@ -4,12 +4,13 @@ from stable_baselines3 import PPO
 from models.optuna_train import optimize_hyperparameters
 from models.train_model import train_and_evaluate
 from models.test_model import test_model
+from mongo.mongo_integration_for_training import train_and_evaluate_with_mongo
 from render.user_interface import show_input_window, show_test_prompt_window, show_start_window
 from utils.logging_files import model_name
 from utils.logger import setup_logger
 
 logger = setup_logger()
-render_mode = True
+render_mode = False
 
 
 def run():
@@ -34,7 +35,8 @@ def run():
         print("Выберите режим работы\n"
               "1 - обучение модели\n"
               "2 - тестирование модели\n"
-              "3 - подбор  optuna")
+              "3 - подбор  optuna\n"
+              "4 - обучение с записью в MongoDB")
 
         try:
             mode = int(input())
@@ -53,6 +55,10 @@ def run():
                 test_model(scenario, model, fire_count, obstacle_count, render=False)
             elif mode == 3:
                 optimize_hyperparameters(scenario, fire_count, obstacle_count)
+            elif mode == 4:
+                logger.info("Starting model training...")
+                model = train_and_evaluate_with_mongo(scenario, fire_count, obstacle_count)
+                logger.info("Training completed!")
             else:
                 print("Недопустимая операция")
         except ValueError:
