@@ -187,7 +187,8 @@ class FireEnv(gym.Env):
         old_pos = self.positions[agent_idx]
         old_distance = self.distances_to_fires[agent_idx] if self.fires else float('inf')
         
-        directions = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        # Проверка соседних клеток на наличие очагов
+        directions = [(0, -1), (0, 1), (-1, 0), (1, 0)]  # вверх, вниз, влево, вправо
         fire_directions = []
         unvisited_fire_directions = []
         
@@ -199,13 +200,15 @@ class FireEnv(gym.Env):
                 if new_pos_candidate not in self.visited_cells:
                     unvisited_fire_directions.append((i, new_pos_candidate))
 
-        if fire_directions and random.random() < 0.95:  # Увеличено до 95%
+        # Если есть соседний очаг, с 95% вероятностью выбираем действие к нему
+        if fire_directions and random.random() < 0.95:  # 95% шанс следовать к очагу
             if unvisited_fire_directions:
                 action, new_pos = random.choice(unvisited_fire_directions)
             else:
                 action, new_pos = random.choice(fire_directions)
             logger.info(f'Agent {agent_idx} forced to fire at {new_pos}')
         else:
+            # В 5% случаев или если очагов рядом нет, используем действие от модели
             dx, dy = directions[action]
             new_pos = (old_pos[0] + dx, old_pos[1] + dy)
 
@@ -220,6 +223,7 @@ class FireEnv(gym.Env):
                     logger.info(f'Agent {agent_idx} repelled from {pos} to {new_pos}')
                     break
 
+        # Обработка действия
         if self.wind.active and new_pos in self.wind.cells:
             new_pos = self._wind_influence(new_pos)
             self.positions[agent_idx] = new_pos
@@ -235,7 +239,7 @@ class FireEnv(gym.Env):
                 self.positions[agent_idx] = new_pos
                 self.visited_cells.add(new_pos)
                 self.reward += e.FIRE_REWARD
-                if new_pos not in self.visited_cells:  # Бонус за непосещённую клетку
+                if new_pos not in self.visited_cells:  # Бонус за непосещённую клетку (опционально)
                     self.reward += 0.05
                     logger.info(f'Agent {agent_idx} bonus for unvisited fire: +0.05')
                 if self.iteration_count < self.max_steps // 2:
@@ -252,6 +256,9 @@ class FireEnv(gym.Env):
                     new_distance = self.distances_to_fires[agent_idx]
                     if new_distance < old_distance:
                         self.steps_without_progress[agent_idx] = 0
+                        self.reward += e.NEAR_FIRE_BONUS  # Добавляем бонус за приближение
+                        logger.info(f'Agent {agent_idx} near fire bonus: +{e.NEAR_FIRE_BONUS}')
+                        self.info["Near Fire Bonus"] = True
 
             if self.wind.active and old_pos in self.wind.cells and new_pos not in self.wind.cells:
                 self.reward += e.WIND_AVOID_BONUS

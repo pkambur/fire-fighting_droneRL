@@ -15,7 +15,7 @@ AGENT_VIEW = 5
 
 # Награды и штрафы
 STEP_PENALTY = -0.001  # штраф за шаг
-FIRE_REWARD = 5  # награда за тушение
+FIRE_REWARD = 2  # награда за тушение
 OBSTACLE_PENALTY = -0.025  # штраф за препятствие
 OUT_OF_BOUNDS_PENALTY = -0.3  # штраф за выход за границы
 CRASH_PENALTY = -0.1
@@ -25,7 +25,7 @@ WIND_AVOID_BONUS = 0.01       # Бонус за избегание ветра
 NEAR_FIRE_BONUS = 0.02  # бонус за приближение
 STAGNATION_THRESHOLD = 20  # порог застоя
 STAGNATION_PENALTY = -0.01  # штраф за застой
-FINAL_REWARD = 5  # награда за тушение всех пожаров
+FINAL_REWARD = 3  # награда за тушение всех пожаров
 
 NEW_STEP_REWARD = 0.05
 REPEAT_STEP_PENALTY = -0.05

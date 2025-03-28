@@ -36,8 +36,9 @@ def test_model(scenario, model, fire_count, obstacle_count, render=True):
     with open(rewards_log_file, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["Episode", "Step", "Agent", "Total Reward", "Fire Reward", "Step Penalty",
-                         "Crash Penalty", "Out of Bounds Penalty", "Obstacle Penalty", "Wind Penalty",
-                         "Wind Avoid Bonus", "Stagnation Penalty", "Close Penalty", "Final Reward"])
+                        "Crash Penalty", "Out of Bounds Penalty", "Obstacle Penalty", "Wind Penalty",
+                        "Wind Avoid Bonus", "Stagnation Penalty", "Close Penalty", "Final Reward",
+                        "Near Fire Bonus"])  
 
     metrics = {
         "successful_attempts": 0,
