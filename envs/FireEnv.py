@@ -171,7 +171,7 @@ class FireEnv(gym.Env):
         return state, self.reward, terminated, truncated, self.info
 
     def spread_fire(self):
-        if self.wind.active and random.random() < (0.05 * self.wind.strength / 3) / 9:
+        if self.wind.active and random.random() < (0.05 * self.wind.strength / 3) / 1:
             new_fires = set()
             for fx, fy in self.fires:
                 nx, ny = fx + self.wind.direction[0], fy + self.wind.direction[1]
@@ -183,6 +183,7 @@ class FireEnv(gym.Env):
                 self.reward += e.FIRE_SPREAD_PENALTY
                 logger.info(f"Fire spread by wind to {new_fires}, penalty: {e.FIRE_SPREAD_PENALTY}")
 
+    
     def _take_action(self, agent_idx: int, action: int):
         old_pos = self.positions[agent_idx]
         old_distance = self.distances_to_fires[agent_idx] if self.fires else float('inf')
@@ -201,7 +202,7 @@ class FireEnv(gym.Env):
                     unvisited_fire_directions.append((i, new_pos_candidate))
 
         # Если есть соседний очаг, с 95% вероятностью выбираем действие к нему
-        if fire_directions and random.random() < 0.95:  # 95% шанс следовать к очагу
+        if fire_directions and random.random() < 0.15:  # 95% шанс следовать к очагу
             if unvisited_fire_directions:
                 action, new_pos = random.choice(unvisited_fire_directions)
             else:

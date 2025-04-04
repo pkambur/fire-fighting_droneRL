@@ -55,8 +55,4 @@ temp/
 .tmp/
 logs/logs.csv
 models/logs/logs.csv
-logs/ppo_tensorboard/PPO_23/events.out.tfevents.1743104560.DESKTOP-3UHQ668.3384.0
-logs/ppo_tensorboard/PPO_24/events.out.tfevents.1743106876.DESKTOP-3UHQ668.12116.0
-logs/ppo_tensorboard/PPO_23/events.out.tfevents.1743104560.DESKTOP-3UHQ668.3384.0
-logs/test_rewards_20250328_120448.csv
-logs/ppo_tensorboard/PPO_1/events.out.tfevents.1743152268.DESKTOP-3UHQ668.3936.0
+

@@ -12,7 +12,7 @@ ppo_config = {
     "clip_range": 0.2,
     "clip_range_vf": 0.2,
     "ent_coef": 0.01,
-    "total_timesteps": 1000000,
+    "total_timesteps": 500000,
     "n_envs": 1,
 },
 
