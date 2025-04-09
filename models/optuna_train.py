@@ -4,11 +4,14 @@ import optuna
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import EvalCallback
-
+import optuna.visualization as vis
+import plotly.io as pio
 from envs.FireEnv import FireEnv
 from envs.FireEnv2 import FireEnv2
 from models.model_config import test_episodes
 from utils.logging_files import tensorboard_log_dir, best_model_path
+
+pio.kaleido.scope.mathjax = None
 
 
 def train_and_evaluate(scenario, fire_count,
@@ -51,11 +54,12 @@ def train_and_evaluate(scenario, fire_count,
         vec_env,
         best_model_save_path=best_model_path,
         log_path=tensorboard_log_dir,
-        eval_freq=1000,
+        eval_freq=1024,
+        deterministic= False,
         render=False
     )
 
-    model.learn(total_timesteps=5000, progress_bar=True, callback=eval_callback)
+    model.learn(total_timesteps=1024*5, progress_bar=True, callback=eval_callback)
 
     # Оценка длины эпизода
     episode_lengths = []
@@ -124,5 +128,22 @@ def optimize_hyperparameters(scenario, fire_count, obstacle_count):
         best_params["n_epochs"], best_params["gamma"], best_params["gae_lambda"],
         best_params["clip_range"], best_params["clip_range_vf"], best_params["ent_coef"]
     )
-
+    plot_optimization_history(study)
+    plot_slice(study)
+    plot_contour(study)
     print(f"Средняя длина эпизода с лучшими гиперпараметрами: {mean_episode_length}")
+
+
+def plot_optimization_history(study):
+    fig = vis.plot_optimization_history(study)
+    fig.write_image("./logs/optimization_history.png")
+
+
+def plot_slice(study):
+    fig = vis.plot_slice(study)
+    fig.write_image("./logs/slice_plot.png")
+
+
+def plot_contour(study):
+    fig = vis.plot_contour(study)
+    fig.write_image("./logs/contour_plot.png")
