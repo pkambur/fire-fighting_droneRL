@@ -5,3 +5,5 @@ numpy==2.2.3
 tensorboard==2.19.0
 matplotlib==3.10.0
 optuna==4.2.1
+pymongo==4.11.3
+kaleido==0.2.1
