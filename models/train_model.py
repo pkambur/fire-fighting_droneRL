@@ -11,7 +11,8 @@ from utils.logging_files import tensorboard_log_dir, model_name, best_model_path
 
 
 def train_and_evaluate(scenario, fire_count, obstacle_count):
-
+    logs_dir = "logs"
+    os.makedirs(logs_dir, exist_ok=True)
     cfg = {}
     def make_env():
         nonlocal cfg
@@ -61,5 +62,7 @@ def train_and_evaluate(scenario, fire_count, obstacle_count):
     model.learn(total_timesteps = cfg["total_timesteps"], progress_bar = True)
     mean_reward, std_reward = evaluate_policy(model, vec_env, n_eval_episodes = 10)
     print(f"Среднее вознаграждение после тренировки: {mean_reward} +/- {std_reward}")
-    model.save(model_name + str(scenario))
+    model_save_path = os.path.join(logs_dir, model_name + str(scenario))
+    model.save(model_save_path)
+    print(f"Модель сохранена по пути: {model_save_path}")
     return model
