@@ -37,7 +37,9 @@ FireFighterRL представляет собой симуляционную с�
 FireFighterRL/
 ├── app.py                  # Основное приложение
 ├── constants/              # Константы
-│   └── colors.py           # Цвета для визуализации
+│   |── colors.py           # Цвета для визуализации
+|   |── agent.py            # Константы состояния агента
+|   └── grid.py             # Константы сетки и визуализации
 ├── data/                   # Данные приложения
 │   ├── best_model/         # Сохраненные лучшие модели
 │   └── images/             # Изображения для визуализации
@@ -45,10 +47,14 @@ FireFighterRL/
 │   ├── __init__.py         # Константы среды
 │   ├── FireEnv.py          # Основная среда пожаротушения
 │   ├── FireEnv2.py         # Альтернативная среда
+│   ├── reward_sys.py       # Функция наград для первого сценария
+│   ├── reward_sys2.py      # Функция наград для второго сценария
+|   ├── Fire.py             # Моделирование распространения огня
 │   └── Wind.py             # Моделирование ветра
 ├── logs/                   # Логи и результаты
 │   ├── logs.csv            # Логи тестирования
 │   ├── test_logs.csv       # Подробные логи тестов
+│   ├── test_rewards.csv    # Подробные логи наград на тестах    
 │   └── ppo_tensorboard/    # Логи для TensorBoard
 ├── main.py                 # Точка входа
 ├── models/                 # Модели RL
@@ -58,12 +64,17 @@ FireFighterRL/
 │   ├── test_model.py       # Тестирование модели
 │   ├── TrainingCallBack.py # Коллбэки для обучения
 │   └── train_model.py      # Обучение модели
+├── mongo/                 # Визуализация
+│   ├── mongo_integration_for_training.py  # Интеграция MongoDB для обучени модели
+│   ├── mongo_integration.py               # MongoDB соединение
+│   └── mongo_test_integration.py          # Интеграция MongoDB для тестирования модели
 ├── render/                 # Визуализация
 │   ├── __init__.py
 │   ├── load_images.py      # Загрузка изображений
 │   └── user_interface.py   # Пользовательский интерфейс
 ├── utils/                  # Утилиты
 │   ├── logger.py           # Логирование
+|   ├── get_conssole_data.py # Логирование в консоли
 │   └── logging_files.py    # Пути к файлам логов
 ├── README.md
 └── requirements.txt        # Зависимости
