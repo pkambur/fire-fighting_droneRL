@@ -112,7 +112,16 @@ def choice_window(caption: str, question: str, choices: list[str], button_width=
             else:  # "Тест с MongoDB"
                 button = pygame.Rect(50 + button_width_extended + 20, 170, button_width_extended, button_height)
         buttons.append(button)
-        pygame.draw.rect(screen, colors.BLUE, button)
+        # Задаем цвета в зависимости от индекса кнопки
+        if i == 0:  # "Обучение"
+            color = colors.GREEN
+        elif i == 1:  # "Тест"
+            color = colors.RED
+        elif i == 2:  # "Optuna"
+            color = colors.GRAY
+        else:  # "Обучение с MongoDB" и "Тест с MongoDB"
+            color = colors.BLUE
+        pygame.draw.rect(screen, color, button)
         draw_text(screen, choice, font, colors.BLACK, button.centerx, button.centery, center=True)
     
     pygame.display.flip()
