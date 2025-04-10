@@ -12,7 +12,6 @@ def load_images(cell_size) -> dict[str, Surface | SurfaceType]:
             "wind": pygame.transform.scale(pygame.image.load("data/images/wind.png"), (cell_size, cell_size)),
             "houses": pygame.transform.scale(pygame.image.load("data/images/houses.jpg"),
                                              (cell_size * 2, cell_size * 2)),
-            #"tree": pygame.transform.scale(pygame.image.load("data/images/tree.png"), (cell_size, cell_size)),
             "burned": pygame.transform.scale(pygame.image.load("data/images/burned.png"), (cell_size, cell_size)),
             "aircraft": pygame.transform.scale(pygame.image.load("data/images/aircraft.png"),
                                              (cell_size * 3, cell_size * 3)),

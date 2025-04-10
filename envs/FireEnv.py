@@ -360,13 +360,11 @@ class FireEnv(gym.Env):
             self.screen.blit(self.images["fire"], (fire[0] * cell, fire[1] * cell))
         for obstacle in self.obstacles:
             self.screen.blit(self.images["obstacle"], (obstacle[0] * cell, obstacle[1] * cell))
-        # for tree in self.trees:
-        #     self.screen.blit(self.images["tree"], (tree[0] * cell, tree[1] * cell))
         if self.wind.cells:
             for wind in self.wind.cells:
                 self.screen.blit(self.images["wind"], (wind[0] * cell, wind[1] * cell))
 
-        for i in range(1 + len(self.base), self.grid_size + houses_margin, 2):
+        for i in range(len(self.base), self.grid_size + houses_margin, 2):
             for j in range(self.grid_size, self.grid_size + houses_margin, 2):
                 self.screen.blit(self.images["houses"], (i * cell, j * cell))
         for base in self.base:
